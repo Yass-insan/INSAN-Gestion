@@ -183,6 +183,11 @@ export interface GlobalHoliday {
   createdAt: string;
 }
 
+export interface CourseModule {
+  title: string;
+  description?: string;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -196,6 +201,16 @@ export interface Course {
   pole: string;
   recurrenceType?: 'WEEKLY' | 'MONTHLY' | 'ROTATION';
   isManualAttendance?: boolean;
+  capacity?: number;
+  
+  // Champs marketing & pédagogiques pour la vitrine
+  imageUrl?: string;
+  description?: string;
+  objectives?: string[];
+  curriculum?: CourseModule[];
+  audience?: string;
+  duration?: string;
+  prerequisites?: string;
 }
 
 export interface AttendanceRecord {
@@ -238,6 +253,8 @@ export interface NewsItem {
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   isUrgent?: boolean;
+  category?: string;
+  excerpt?: string;
 }
 
 export interface Notification {
@@ -250,16 +267,22 @@ export interface Notification {
   time: string;
 }
 
+export interface Room {
+  name: string;
+  capacity: number;
+}
+
 export interface InstituteSettings {
   name: string;
   address: string;
   lat: number;
   lng: number;
   radius: number;
-  rooms: string[];
+  rooms: Room[];
+  language?: string;
+  currency?: string;
 }
 
-// --- CHAT TYPES ---
 export enum ChatRoomType {
   CLASS = 'CLASS',
   GROUP = 'GROUP',
@@ -289,7 +312,6 @@ export interface ChatMessage {
   attachmentType?: 'image';
 }
 
-// --- FOLLOW UP TYPES ---
 export enum FollowUpStatus {
   TO_CONTACT = 'TO_CONTACT',
   CONTACTED = 'CONTACTED',

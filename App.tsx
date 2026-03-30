@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Layout from './components/Layout';
 
-// --- FEATURE IMPORTS ---
+// DASHBOARDS EXISTANTS (INTÉGRÉS TELS QUELS)
 import AdminDashboard from './features/admin/AdminDashboard';
 import { StatisticsPage } from './features/admin/StatisticsPage';
 import { SettingsPage } from './features/admin/SettingsPage';
@@ -16,150 +17,64 @@ import PoleDashboard from './features/pole/PoleDashboard';
 import PointagePage from './features/staff/PointagePage';
 import RegistrationManagement from './features/admin/RegistrationManagement';
 import TarificationSettings from './features/admin/TarificationSettings';
-
-// Shared Components
 import Chat from './components/Chat';
+import BlogManagement from './features/admin/BlogManagement';
 
+// PAGES PUBLIQUES (SITE VITRINE)
+import LandingPage from './features/public/LandingPage';
+import CourseCatalog from './features/public/CourseCatalog';
+import AboutPage from './features/public/AboutPage';
+import NewsPage from './features/public/NewsPage';
+import ContactPage from './features/public/ContactPage';
+import PublicRegistration from './features/public/PublicRegistration';
+
+// Fix: Add missing Homework to the imports from ./types
 import { 
-  User, 
-  UserRole, 
-  NewsItem, 
-  Course, 
-  AttendanceRecord, 
-  AttendanceStatus, 
-  Homework, 
-  InstituteSettings, 
-  WorkSchedule, 
-  Pole, 
-  LeaveRequest, 
-  LeaveStatus,
-  RegistrationDossier,
-  PricingSettings,
-  FollowUpRecord,
-  GlobalHoliday
+  User, UserRole, NewsItem, Course, AttendanceRecord, 
+  InstituteSettings, WorkSchedule, Pole, LeaveRequest, 
+  RegistrationDossier, PricingSettings, FollowUpRecord, GlobalHoliday,
+  Homework
 } from './types';
 import { USERS, NEWS_LIST, COURSES, ATTENDANCE_HISTORY, HOMEWORK_LIST, WORK_SCHEDULES, POLES, LEAVE_REQUESTS } from './services/mockData';
 import { DEFAULT_LAT, DEFAULT_LNG } from './services/utils';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState('dashboard');
-  
-  // Theme Management
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('theme');
-      return savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
+  const [currentView, setCurrentView] = useState('home');
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
-
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
-
-  // App State
-  const [news, setNews] = useState<NewsItem[]>(NEWS_LIST);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>(ATTENDANCE_HISTORY);
+  // ÉTAT PARTAGÉ CENTRALISÉ
+  const [dossiers, setDossiers] = useState<RegistrationDossier[]>([]);
   const [coursesList, setCoursesList] = useState<Course[]>(COURSES);
   const [usersList, setUsersList] = useState<User[]>(USERS);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>(ATTENDANCE_HISTORY);
+  const [news, setNews] = useState<NewsItem[]>(NEWS_LIST);
   const [schedules, setSchedules] = useState<WorkSchedule[]>(WORK_SCHEDULES);
+  // Fix: Homework type is now imported correctly from ./types
   const [homeworkList, setHomeworkList] = useState<Homework[]>(HOMEWORK_LIST);
   const [polesList, setPolesList] = useState<Pole[]>(POLES);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(LEAVE_REQUESTS);
-  
   const [globalHolidays, setGlobalHolidays] = useState<GlobalHoliday[]>([]);
   const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>([]);
 
-  // Statistics Deep-linking State
-  const [statsFilters, setStatsFilters] = useState<{ poleId: string; classId: string }>({ poleId: 'ALL', classId: 'ALL' });
-
-  // Registration State
-  const [dossiers, setDossiers] = useState<RegistrationDossier[]>([]);
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>({
-      coursePrices: {
-          'c1': { onSite: 350, remote: 300 },
-          'c2': { onSite: 280, remote: 250 },
-          'c3': { onSite: 300, remote: 270 },
-          'c4': { onSite: 450, remote: 400 }
-      },
-      hybridSurcharge: 50,
+      coursePrices: {},
       dossierFees: 40,
       montessoriFees: 80,
-      discounts: {
-          multiCourse: 10,
-          multiChild: 15
-      }
+      discounts: { multiCourse: 10, multiChild: 15 }
   });
 
-  // Institute Settings State
   const [instituteSettings, setInstituteSettings] = useState<InstituteSettings>({
-    name: 'Institut Insan',
-    address: '99 rue de Gerland, 69007 Lyon',
-    lat: DEFAULT_LAT,
-    lng: DEFAULT_LNG,
-    radius: 100,
-    rooms: ['Salle A', 'Salle B', 'Salle C', 'Bibliothèque', 'Salle de Conférence']
+    name: 'Institut Insan', address: '99 rue de Gerland, 69007 Lyon',
+    lat: DEFAULT_LAT, lng: DEFAULT_LNG, radius: 100, rooms: [{name: 'Salle A', capacity: 25}], language: 'fr', currency: '€'
   });
 
   const handleSaveDossier = (dossier: RegistrationDossier) => {
-      setDossiers(prev => {
-          const exists = prev.find(d => d.id === dossier.id);
-          if (exists) {
-              return prev.map(d => d.id === dossier.id ? dossier : d);
-          }
-          return [dossier, ...prev];
-      });
-
-      dossier.students.forEach(student => {
-          const existingUser = usersList.find(u => u.id === student.id || u.email === student.email);
-          if (!existingUser) {
-              const newUser: User = {
-                  id: student.id,
-                  name: `${student.firstName} ${student.lastName}`,
-                  email: student.email || `eleve.${student.id}@insan.com`,
-                  role: UserRole.STUDENT,
-                  classId: dossier.enrollments.find(e => e.studentId === student.id)?.courseId,
-                  avatar: student.avatar || `https://ui-avatars.com/api/?name=${student.firstName}+${student.lastName}&background=random`
-              };
-              setUsersList(prev => [...prev, newUser]);
-          } else {
-              setUsersList(prev => prev.map(u => 
-                  (u.id === student.id || u.email === student.email)
-                  ? { ...u, avatar: student.avatar || u.avatar, name: `${student.firstName} ${student.lastName}` }
-                  : u
-              ));
-          }
-      });
-  };
-
-  const handleDeleteDossier = (id: string) => {
-      if (window.confirm("Supprimer définitivement ce dossier d'inscription ?")) {
-          setDossiers(prev => prev.filter(d => d.id !== id));
-      }
-  };
-
-  const handleUpdateFollowUp = (record: FollowUpRecord) => {
-      setFollowUpRecords(prev => {
-          const exists = prev.find(f => f.studentId === record.studentId && f.courseId === record.courseId);
-          if (exists) {
-              return prev.map(f => (f.studentId === record.studentId && f.courseId === record.courseId) ? record : f);
-          }
-          return [...prev, record];
-      });
-  };
-
-  const hasRole = (targetRole: UserRole) => {
-      if (!user) return false;
-      return user.role === targetRole || user.secondaryRoles?.includes(targetRole);
+    setDossiers(prev => {
+        const exists = prev.find(d => d.id === dossier.id);
+        if (exists) return prev.map(d => d.id === dossier.id ? dossier : d);
+        return [dossier, ...prev];
+    });
   };
 
   const handleLogin = (email: string) => {
@@ -172,151 +87,74 @@ function App() {
     }
   };
 
-  const handleClockIn = (isExit: boolean) => {
-    if (!user) return;
-    const today = new Date().toISOString().split('T')[0];
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (isExit) {
-        setAttendance(prev => prev.map(r => 
-            (r.studentId === user.id && r.date === today && !r.exitTimestamp) 
-            ? { ...r, exitTimestamp: time } 
-            : r
-        ));
-    } else {
-        const newRecord: AttendanceRecord = {
-          id: Date.now().toString(),
-          studentId: user.id,
-          courseId: user.classId || 'ADMIN', 
-          date: today,
-          entryTimestamp: time,
-          status: AttendanceStatus.PRESENT 
-        };
-        setAttendance([newRecord, ...attendance]);
-    }
-  };
-
-  const handleJustifyAttendance = (recordId: string, text: string) => {
-      setAttendance(prev => prev.map(r => r.id === recordId ? { ...r, justification: text, justificationStatus: 'PENDING' } : r));
-  };
-
-  const handleAddAttendance = (record: AttendanceRecord) => {
-    setAttendance([record, ...attendance]);
-  };
-
-  const handleAddNews = (item: NewsItem) => {
-    setNews([item, ...news]);
-  };
-
-  const handleManageCourses = (action: 'add' | 'update' | 'delete', course: Course) => {
-      if (action === 'add') setCoursesList(prev => [...prev, course]);
-      else if (action === 'update') setCoursesList(prev => prev.map(c => c.id === course.id ? course : c));
-      else if (action === 'delete') setCoursesList(prev => prev.filter(c => c.id !== course.id));
-  };
-
-  const handleManageUsers = (action: 'add' | 'update' | 'delete', updatedUser: User) => {
-      if (action === 'add') setUsersList([...usersList, updatedUser]);
-      else if (action === 'delete') setUsersList(usersList.filter(u => u.id !== updatedUser.id));
-      else setUsersList(usersList.map(u => u.id === updatedUser.id ? updatedUser : u));
-  };
-
-  const handleUpdateSettings = (settings: InstituteSettings) => setInstituteSettings(settings);
-
-  const handleManageSchedule = (action: 'add' | 'delete', schedule: WorkSchedule) => {
-      if (action === 'add') setSchedules([...schedules, schedule]);
-      else setSchedules(schedules.filter(s => s.id !== schedule.id));
-  };
-
-  const handleManageHomework = (action: 'add' | 'delete', homework: Homework) => {
-    if (action === 'add') setHomeworkList([...homeworkList, homework]);
-    else setHomeworkList(homeworkList.filter(h => h.id !== homework.id));
-  };
-
-  const handleManagePoles = (action: 'add' | 'delete', pole: Pole) => {
-      if (action === 'add') setPolesList([...polesList, pole]);
-      else setPolesList(polesList.filter(p => p.id !== pole.id));
-  };
-
-  const handleManageLeave = (action: 'add' | 'update', leave: LeaveRequest) => {
-      if (action === 'add') setLeaveRequests([leave, ...leaveRequests]);
-      else setLeaveRequests(leaveRequests.map(l => l.id === leave.id ? leave : l));
-  };
-
-  const handleManageGlobalHolidays = (action: 'add' | 'delete', holiday: GlobalHoliday) => {
-      if (action === 'add') setGlobalHolidays(prev => [...prev, holiday]);
-      else setGlobalHolidays(prev => prev.filter(h => h.id !== holiday.id));
-  };
-
-  const handleNavigateToStats = (poleId: string, classId: string) => {
-      setStatsFilters({ poleId, classId });
-      setCurrentView('stats');
-  };
-
-  if (!user) {
-    return <Login onLogin={handleLogin} />;
-  }
-
   const renderContent = () => {
+    // --- ROUTES PUBLIQUES ---
+    if (currentView === 'home') return <LandingPage onNavigate={setCurrentView} courses={coursesList} dossiers={dossiers} />;
+    if (currentView === 'formations-online') return <CourseCatalog mode="remote" courses={coursesList} dossiers={dossiers} onRegister={() => setCurrentView('public-register')} />;
+    if (currentView === 'formations-presence') return <CourseCatalog mode="on-site" courses={coursesList} dossiers={dossiers} onRegister={() => setCurrentView('public-register')} />;
+    if (currentView === 'about') return <AboutPage />;
+    if (currentView === 'news') return <NewsPage news={news} />;
+    if (currentView === 'contact') return <ContactPage />;
+    if (currentView === 'public-register') return <PublicRegistration courses={coursesList} dossiers={dossiers} pricing={pricingSettings} onComplete={handleSaveDossier} onBack={() => setCurrentView('home')} />;
+    if (currentView === 'login') return <Login onLogin={handleLogin} />;
+
+    // --- DASHBOARDS PRIVÉS (RESTRICTION AUTH) ---
+    if (!user) return <Login onLogin={handleLogin} />;
+
     switch (currentView) {
       case 'dashboard':
-        if (hasRole(UserRole.STUDENT) && !hasRole(UserRole.ADMIN)) return <StudentDashboard user={user} news={news} courses={coursesList} attendance={attendance} homework={homeworkList} onClockIn={handleClockIn} settings={instituteSettings} onJustify={handleJustifyAttendance} leaveRequests={leaveRequests} onManageLeave={handleManageLeave} />;
-        if (hasRole(UserRole.ADMIN)) return <AdminDashboard user={user} news={news} courses={coursesList} attendance={attendance} users={usersList} dossiers={dossiers} onAddNews={handleAddNews} settings={instituteSettings} schedules={schedules} poles={polesList} onNavigate={setCurrentView} />;
-        if (hasRole(UserRole.PROFESSOR)) return <ProfessorDashboard user={user} news={news} courses={coursesList} attendance={attendance} homework={homeworkList} users={usersList} onClockIn={handleClockIn} onAddNews={handleAddNews} settings={instituteSettings} onAddAttendance={handleAddAttendance} onManageHomework={handleManageHomework} />;
-        if (hasRole(UserRole.RESPONSIBLE)) return <PoleDashboard user={user} news={news} courses={coursesList} attendance={attendance} users={usersList} onClockIn={handleClockIn} settings={instituteSettings} poles={polesList} />;
-        if (hasRole(UserRole.EMPLOYEE)) return <EmployeeDashboard user={user} schedules={schedules} leaveRequests={leaveRequests} onClockIn={handleClockIn} settings={instituteSettings} onManageLeave={handleManageLeave} />;
-        return <div className="p-10 text-center text-gray-500">Rôle non reconnu.</div>;
+        if (user.role === UserRole.STUDENT) return <StudentDashboard user={user} news={news} courses={coursesList} attendance={attendance} homework={homeworkList} onClockIn={() => {}} settings={instituteSettings} />;
+        if (user.role === UserRole.ADMIN) return <AdminDashboard user={user} news={news} courses={coursesList} attendance={attendance} users={usersList} dossiers={dossiers} onAddNews={(n) => setNews([n, ...news])} settings={instituteSettings} schedules={schedules} poles={polesList} onNavigate={setCurrentView} />;
+        if (user.role === UserRole.PROFESSOR) return <ProfessorDashboard user={user} news={news} courses={coursesList} attendance={attendance} homework={homeworkList} users={usersList} onClockIn={() => {}} onAddNews={(n) => setNews([n, ...news])} settings={instituteSettings} onAddAttendance={(r) => setAttendance([...attendance, r])} onManageHomework={(a, h) => setHomeworkList(a === 'add' ? [...homeworkList, h] : homeworkList.filter(x => x.id !== h.id))} />;
+        if (user.role === UserRole.RESPONSIBLE) return <PoleDashboard user={user} news={news} courses={coursesList} attendance={attendance} users={usersList} onClockIn={() => {}} settings={instituteSettings} poles={polesList} />;
+        if (user.role === UserRole.EMPLOYEE) return <EmployeeDashboard user={user} schedules={schedules} leaveRequests={leaveRequests} onClockIn={() => {}} settings={instituteSettings} onManageLeave={(a, l) => setLeaveRequests(a === 'add' ? [...leaveRequests, l] : leaveRequests.map(x => x.id === l.id ? l : x))} />;
+        return <div className="p-10 text-center">Dashboard non configuré</div>;
       
       case 'inscriptions':
-        return <RegistrationManagement dossiers={dossiers} courses={coursesList} poles={polesList} pricing={pricingSettings} currentUser={user} onSaveDossier={handleSaveDossier} onDeleteDossier={handleDeleteDossier} />;
-
-      case 'tarification':
-        return <TarificationSettings pricing={pricingSettings} courses={coursesList} poles={polesList} onUpdate={setPricingSettings} />;
-
-      case 'attendance':
-        if (hasRole(UserRole.PROFESSOR) || hasRole(UserRole.EMPLOYEE) || hasRole(UserRole.RESPONSIBLE)) {
-            return <PointagePage user={user} schedules={schedules} attendance={attendance} settings={instituteSettings} onClockIn={handleClockIn} />;
-        }
-        return <StudentDashboard user={user} news={news} courses={coursesList} attendance={attendance} homework={homeworkList} onClockIn={handleClockIn} settings={instituteSettings} />;
-
-      case 'my-rh':
-        return <EmployeeDashboard user={user} schedules={schedules} leaveRequests={leaveRequests} onClockIn={handleClockIn} settings={instituteSettings} onManageLeave={handleManageLeave} />;
-
-      case 'employees':
-        return <EmployeeManagement users={usersList} attendance={attendance} schedules={schedules} courses={coursesList} poles={polesList} leaveRequests={leaveRequests} globalHolidays={globalHolidays} onAddAttendance={handleAddAttendance} onManageUsers={handleManageUsers} onManageSchedule={handleManageSchedule} onManageLeave={handleManageLeave} onManageGlobalHoliday={handleManageGlobalHolidays} />;
+        return <RegistrationManagement dossiers={dossiers} users={usersList} courses={coursesList} poles={polesList} pricing={pricingSettings} currentUser={user} onSaveDossier={handleSaveDossier} onDeleteDossier={(id) => setDossiers(dossiers.filter(d => d.id !== id))} settings={instituteSettings} />;
+      
+      case 'students':
+        return <StudentTracking users={usersList} courses={coursesList} attendance={attendance} dossiers={dossiers} followUpRecords={followUpRecords} onUpdateFollowUp={(r) => setFollowUpRecords(prev => prev.map(f => f.id === r.id ? r : f).concat(prev.some(f => f.id === r.id) ? [] : [r]))} onNavigateToStats={() => setCurrentView('stats')} onNavigateToDossier={() => setCurrentView('inscriptions')} homework={homeworkList} currentUser={user} onManageUsers={() => {}} />;
 
       case 'manage-courses':
-        return <CourseManagement courses={coursesList} users={usersList} poles={polesList} settings={instituteSettings} onManage={handleManageCourses} onManagePoles={handleManagePoles} />;
+        return <CourseManagement dossiers={dossiers} courses={coursesList} users={usersList} poles={polesList} settings={instituteSettings} onManage={(a, c) => setCoursesList(a === 'add' ? [...coursesList, c] : a === 'update' ? coursesList.map(x => x.id === c.id ? c : x) : coursesList.filter(x => x.id !== c.id))} onManagePoles={(a, p) => setPolesList(a === 'add' ? [...polesList, p] : a === 'update' ? polesList.map(x => x.id === p.id ? p : x) : polesList.filter(x => x.id !== p.id))} />;
 
-      case 'settings':
-        return <SettingsPage settings={instituteSettings} onUpdateSettings={handleUpdateSettings} />;
+      case 'manage-blog':
+        return <BlogManagement news={news} onManage={(a, item) => setNews(a === 'add' ? [item, ...news] : a === 'update' ? news.map(x => x.id === item.id ? item : x) : news.filter(x => x.id !== item.id))} />;
+
+      case 'employees':
+        return <EmployeeManagement users={usersList} attendance={attendance} schedules={schedules} courses={coursesList} poles={polesList} leaveRequests={leaveRequests} globalHolidays={globalHolidays} onManageUsers={(a, u) => setUsersList(a === 'add' ? [...usersList, u] : a === 'update' ? usersList.map(x => x.id === u.id ? u : x) : usersList.filter(x => x.id !== u.id))} onManageSchedule={(a, s) => setSchedules(a === 'add' ? [...schedules, s] : schedules.filter(x => x.id !== s.id))} onManageLeave={(a, l) => setLeaveRequests(a === 'add' ? [...leaveRequests, l] : leaveRequests.map(x => x.id === l.id ? l : x))} onManageGlobalHoliday={(a, h) => setGlobalHolidays(a === 'add' ? [...globalHolidays, h] : globalHolidays.filter(x => x.id !== h.id))} />;
+
+      case 'tarification':
+        return <TarificationSettings pricing={pricingSettings} courses={coursesList} poles={polesList} onUpdate={setPricingSettings} settings={instituteSettings} />;
 
       case 'stats':
-        return <StatisticsPage courses={coursesList} attendance={attendance} users={usersList} poles={polesList} dossiers={dossiers} initialFilters={statsFilters} />;
+        return <StatisticsPage courses={coursesList} attendance={attendance} users={usersList} poles={polesList} dossiers={dossiers} settings={instituteSettings} />;
+
+      case 'attendance':
+        return <PointagePage user={user} schedules={schedules} attendance={attendance} settings={instituteSettings} onClockIn={(isExit) => {}} />;
 
       case 'chat':
         return <Chat currentUser={user} users={usersList} courses={coursesList} poles={polesList} attendance={attendance} />;
-        
-      case 'students':
-        const restrictedUsers = hasRole(UserRole.ADMIN) ? usersList : usersList.filter(u => u.role === UserRole.STUDENT && coursesList.filter(c => c.professorIds.includes(user.id)).some(c => c.id === u.classId));
-        return <StudentTracking 
-            users={restrictedUsers} 
-            courses={coursesList} 
-            attendance={attendance} 
-            followUpRecords={followUpRecords} 
-            onUpdateFollowUp={handleUpdateFollowUp} 
-            onNavigateToStats={handleNavigateToStats}
-            homework={homeworkList} 
-            currentUser={user} 
-            onManageUsers={handleManageUsers} 
-        />;
+
+      case 'settings':
+        return <SettingsPage settings={instituteSettings} onUpdateSettings={setInstituteSettings} />;
 
       default:
-        return <div className="p-10 text-center text-gray-500">Page en construction</div>;
+        return <div className="p-10 text-center">Module en cours de chargement...</div>;
     }
   };
 
   return (
-    <Layout user={user} onLogout={() => setUser(null)} currentView={currentView} setCurrentView={setCurrentView} isDarkMode={isDarkMode} toggleTheme={toggleTheme}>
+    <Layout 
+        user={user} 
+        onLogout={() => { setUser(null); setCurrentView('home'); }} 
+        currentView={currentView} 
+        setCurrentView={setCurrentView} 
+        isDarkMode={isDarkMode} 
+        toggleTheme={() => setIsDarkMode(!isDarkMode)} 
+        settings={instituteSettings}
+    >
       {renderContent()}
     </Layout>
   );

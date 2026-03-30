@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { ChevronRight, ShieldCheck, GraduationCap } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface LoginProps {
   onLogin: (email: string) => void;
@@ -10,11 +12,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'login' | 'demo'>('login');
-  const [logoError, setLogoError] = useState(false);
-
-  // URL Proxy avec encodage correct
-  const encodedLogoUrl = encodeURIComponent("https://institut-insan.com/wp-content/uploads/2023/07/Logo-Institut-Insan-1.png");
-  const LOGO_URL = `https://wsrv.nl/?url=${encodedLogoUrl}&w=400&output=png`;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,23 +44,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(#262262 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
             
             <div className="relative z-10">
-                {logoError ? (
-                  <div className="mb-8 inline-flex items-center gap-3">
-                     <div className="bg-white/90 dark:bg-slate-900/90 p-3 rounded-2xl shadow-lg backdrop-blur-sm">
-                        <div className="flex flex-col items-center justify-center">
-                            <span className="font-extrabold text-insan-blue dark:text-blue-400 tracking-tighter text-3xl leading-none">INSTITUT</span>
-                            <span className="font-bold text-insan-orange tracking-[0.2em] text-sm leading-none mt-1">INSAN</span>
-                        </div>
-                     </div>
-                  </div>
-                ) : (
-                  <img 
-                      src={LOGO_URL} 
-                      alt="Institut Insan" 
-                      className="h-24 object-contain mb-8"
-                      onError={() => setLogoError(true)}
-                  />
-                )}
+                <Logo className="h-20 mb-8" />
                 
                 <h1 className="text-3xl font-bold text-insan-blue dark:text-blue-400 mb-2 tracking-tight">Portail Numérique</h1>
                 <p className="text-gray-500 dark:text-slate-400 text-lg leading-relaxed">

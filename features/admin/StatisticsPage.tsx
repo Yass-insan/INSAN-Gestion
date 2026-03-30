@@ -42,6 +42,7 @@ import {
     Bar,
     Legend
 } from 'recharts';
+import { getTranslation } from '../../services/i18n';
 
 interface StatisticsPageProps {
     courses: Course[];
@@ -50,12 +51,17 @@ interface StatisticsPageProps {
     poles: Pole[];
     dossiers: RegistrationDossier[];
     initialFilters?: { poleId: string; classId: string };
+    settings?: any;
 }
 
-export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attendance, users, poles, dossiers, initialFilters }) => {
+export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attendance, users, poles, dossiers, initialFilters, settings }) => {
     // --- ÉTAT DES FILTRES ---
     const [selectedPole, setSelectedPole] = useState('ALL');
     const [selectedClass, setSelectedClass] = useState('ALL');
+
+    const lang = settings?.language || 'fr';
+    const currency = settings?.currency || '€';
+    const t = (key: string) => getTranslation(key, lang);
 
     // Sync initial filters if provided
     useEffect(() => {
@@ -177,10 +183,10 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
 
     // --- GRAPH DATA ---
     const attendancePieData = [
-        { name: 'Présent', value: attendanceStats.present, color: '#10b981' },
-        { name: 'Retard', value: attendanceStats.late, color: '#f59e0b' },
-        { name: 'Absent', value: attendanceStats.absent, color: '#ef4444' },
-        { name: 'Justifié', value: attendanceStats.justified, color: '#3b82f6' }
+        { name: t('present'), value: attendanceStats.present, color: '#10b981' },
+        { name: t('late'), value: attendanceStats.late, color: '#f59e0b' },
+        { name: t('absent'), value: attendanceStats.absent, color: '#ef4444' },
+        { name: t('justified'), value: attendanceStats.justified, color: '#3b82f6' }
     ];
 
     const timelineData = useMemo(() => {
@@ -216,7 +222,7 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border border-slate-100 dark:border-slate-800">
                 <div className="flex-1">
                     <h2 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter flex items-center gap-4">
-                        <BarChart3 size={36} className="text-insan-blue dark:text-blue-400"/> Pilotage Stratégique
+                        <BarChart3 size={36} className="text-insan-blue dark:text-blue-400"/> {t('pilotage')}
                     </h2>
                     <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Analyse granulaire des performances académiques et financières.</p>
                 </div>
@@ -254,8 +260,8 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="p-8 border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 relative overflow-hidden group">
                     <div className="absolute right-0 top-0 w-32 h-32 bg-insan-blue/5 dark:bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-700"></div>
-                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Euro size={12}/> Chiffre d'Affaires Actif</p>
-                    <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">{financeStats.totalToPay.toLocaleString()} €</p>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Euro size={12}/> {t('total_ca')} Actif</p>
+                    <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">{financeStats.totalToPay.toLocaleString()} {currency}</p>
                     <div className="mt-4 flex items-center gap-2">
                         <span className="text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-1 rounded-lg flex items-center gap-1">
                             <TrendingUp size={10}/> +12% vs N-1
@@ -265,8 +271,8 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
 
                 <Card className="p-8 border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 relative overflow-hidden group">
                     <div className="absolute right-0 top-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-700"></div>
-                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Wallet size={12}/> Trésorerie Encaissée</p>
-                    <p className="text-4xl font-black text-green-600 dark:text-green-400 tracking-tighter">{financeStats.totalPaid.toLocaleString()} €</p>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Wallet size={12}/> {t('cash_flow')}</p>
+                    <p className="text-4xl font-black text-green-600 dark:text-green-400 tracking-tighter">{financeStats.totalPaid.toLocaleString()} {currency}</p>
                     <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full mt-4 overflow-hidden">
                         <div className="h-full bg-green-500" style={{ width: `${financeStats.totalToPay > 0 ? (financeStats.totalPaid / financeStats.totalToPay * 100) : 0}%` }}></div>
                     </div>
@@ -276,14 +282,14 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                 <Card className="p-8 border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 relative overflow-hidden group">
                     <div className="absolute right-0 top-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-700"></div>
                     <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><CreditCard size={12}/> Reste à Recouvrer</p>
-                    <p className="text-4xl font-black text-red-500 dark:text-red-400 tracking-tighter">{financeStats.totalMissing.toLocaleString()} €</p>
+                    <p className="text-4xl font-black text-red-500 dark:text-red-400 tracking-tighter">{financeStats.totalMissing.toLocaleString()} {currency}</p>
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-2">Soit {Math.round(financeStats.totalToPay > 0 ? (financeStats.totalMissing / financeStats.totalToPay * 100) : 0)}% du CA global</p>
                 </Card>
 
                 <Card className="p-8 border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 relative overflow-hidden group">
                     <div className="absolute right-0 top-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-700"></div>
                     <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Target size={12}/> Panier Moyen</p>
-                    <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">{Math.round(financeStats.panierMoyen).toLocaleString()} €</p>
+                    <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">{Math.round(financeStats.panierMoyen).toLocaleString()} {currency}</p>
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-2">Par famille inscrite</p>
                 </Card>
             </div>
@@ -318,7 +324,7 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                                <Area yAxisId="left" type="monotone" dataKey="ca" name="CA (€)" stroke="#f7941d" strokeWidth={3} fillOpacity={1} fill="url(#colorCa)" />
+                                <Area yAxisId="left" type="monotone" dataKey="ca" name={`CA (${currency})`} stroke="#f7941d" strokeWidth={3} fillOpacity={1} fill="url(#colorCa)" />
                                 <Area yAxisId="right" type="monotone" dataKey="inscriptions" name="Inscrits" stroke="#262262" strokeWidth={3} fillOpacity={1} fill="url(#colorIns)" />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -328,7 +334,7 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                 {/* GRAPHIQUE PRÉSENCE */}
                 <Card className="p-8 border-0 shadow-lg bg-white dark:bg-slate-900 flex flex-col">
                     <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-                        <Activity className="text-green-500"/> Assiduité Globale
+                        <Activity className="text-green-500"/> {t('attendance_rate')} Global
                     </h3>
                     <p className="text-xs text-slate-400 dark:text-slate-500 font-bold mb-6">Répartition des statuts de présence</p>
                     
@@ -355,7 +361,7 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                         {/* Center Text */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">{attendanceStats.rate}%</span>
-                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase">Présence</span>
+                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase">{t('attendance_rate')}</span>
                         </div>
                     </div>
 
@@ -379,23 +385,27 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                         <Layers className="text-slate-400"/> Segmentation des Paiements
                     </h3>
                     <div className="space-y-3">
-                        {Object.entries(financeStats.segmentMap).map(([key, data]) => (
-                            <div key={key} className="flex items-center gap-4 group">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shadow-inner ${data.count > 0 ? 'bg-slate-100 dark:bg-slate-800 text-insan-blue dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600'}`}>
-                                    {key === '10' ? 'M' : `${key}X`}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{data.label}</span>
-                                        <span className="font-black text-slate-800 dark:text-white text-sm">{data.count} Familles</span>
+                        {Object.entries(financeStats.segmentMap).map(([key, dataVal]) => {
+                            // Fix: Type casting 'dataVal' to resolve TS 'unknown' error in Object.entries
+                            const data = dataVal as { label: string; count: number; totalAmount: number };
+                            return (
+                                <div key={key} className="flex items-center gap-4 group">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shadow-inner ${data.count > 0 ? 'bg-slate-100 dark:bg-slate-800 text-insan-blue dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600'}`}>
+                                        {key === '10' ? 'M' : `${key}X`}
                                     </div>
-                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                                        <div className="h-full bg-insan-blue dark:bg-blue-500 transition-all duration-1000" style={{ width: `${financeStats.totalActiveDossiers > 0 ? (data.count / financeStats.totalActiveDossiers * 100) : 0}%` }}></div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{data.label}</span>
+                                            <span className="font-black text-slate-800 dark:text-white text-sm">{data.count} Familles</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                            <div className="h-full bg-insan-blue dark:bg-blue-500 transition-all duration-1000" style={{ width: `${financeStats.totalActiveDossiers > 0 ? (data.count / financeStats.totalActiveDossiers * 100) : 0}%` }}></div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 text-right">Volume CA: {data.totalAmount.toLocaleString()}{currency}</p>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 text-right">Volume CA: {data.totalAmount.toLocaleString()}€</p>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </Card>
 
@@ -413,7 +423,7 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                         </div>
                         <div className="p-4 bg-white/60 dark:bg-slate-800/60 rounded-2xl backdrop-blur-sm border border-red-100 dark:border-red-900/30 text-center">
                             <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Manque à gagner</p>
-                            <p className="text-3xl font-black text-red-600 dark:text-red-400">{financeStats.caPerdu.toLocaleString()} €</p>
+                            <p className="text-3xl font-black text-red-600 dark:text-red-400">{financeStats.caPerdu.toLocaleString()} {currency}</p>
                             <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold">CA théorique perdu</p>
                         </div>
                     </div>

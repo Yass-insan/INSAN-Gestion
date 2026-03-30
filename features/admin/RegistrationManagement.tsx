@@ -12,7 +12,10 @@ import {
     Pole, 
     StudentInfo, 
     LegalGuardian, 
-    RegistrationStatus 
+    RegistrationStatus,
+    User,
+    UserRole,
+    InstituteSettings
 } from '../../types';
 import { Card, Button, Badge, PageHeader } from '../../components/ui/DesignSystem';
 import { 
@@ -43,27 +46,43 @@ import {
     ArrowLeftRight, 
     ClipboardCheck,
     RotateCcw,
-    AlertCircle
+    AlertCircle,
+    DoorOpen
 } from 'lucide-react';
 
 interface RegistrationManagementProps {
     dossiers: RegistrationDossier[];
+    users: User[];
     courses: Course[];
     poles: Pole[];
     pricing: PricingSettings;
     currentUser: { name: string };
     onSaveDossier: (dossier: RegistrationDossier) => void;
     onDeleteDossier: (id: string) => void;
+    initialDossierId?: string | null;
+    onClearTargetId?: () => void;
+    settings?: InstituteSettings;
 }
 
 const RegistrationManagement: React.FC<RegistrationManagementProps> = ({ 
-    dossiers, courses, poles, pricing, currentUser, onSaveDossier, onDeleteDossier 
+    dossiers, users, courses, poles, pricing, currentUser, onSaveDossier, onDeleteDossier, initialDossierId, onClearTargetId, settings 
 }) => {
     const [view, setView] = useState<'list' | 'form'>('list');
     const [searchTerm, setSearchTerm] = useState('');
     const [editingDossier, setEditingDossier] = useState<RegistrationDossier | null>(null);
     const [previewDossier, setPreviewDossier] = useState<RegistrationDossier | null>(null);
     
+    // Handle automatic preview from initialDossierId
+    useEffect(() => {
+        if (initialDossierId) {
+            const dossier = dossiers.find(d => d.id === initialDossierId);
+            if (dossier) {
+                setPreviewDossier(dossier);
+            }
+            if (onClearTargetId) onClearTargetId();
+        }
+    }, [initialDossierId, dossiers, onClearTargetId]);
+
     // Form State
     const [formData, setFormData] = useState<Partial<RegistrationDossier>>({
         status: RegistrationStatus.ACTIVE,
@@ -87,6 +106,42 @@ const RegistrationManagement: React.FC<RegistrationManagementProps> = ({
 
     const [paymentAmount, setPaymentAmount] = useState<string>('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
+
+    // --- AVAILABILITY HELPERS (PHYSICAL SEATS ONLY) ---
+    // NO MODIFICATION to existing getCourseOccupancy name, but update logic to be strict physical
+    const getCourseOccupancy = (courseId: string) => {
+        // 1. Occupation via dossiers déjà validés (Exclure le distanciel)
+        const storedOccupancy = dossiers
+            .filter(d => d.id !== formData.id && d.status !== RegistrationStatus.CANCELLED)
+            .reduce((total, d) => {
+                const physicalCount = d.enrollments.filter(e => 
+                    e.courseId === courseId && 
+                    e.status !== RegistrationStatus.CANCELLED &&
+                    (e.formula === CourseFormula.ON_SITE || e.formula === CourseFormula.HYBRID)
+                ).length;
+                return total + physicalCount;
+            }, 0);
+
+        // 2. Occupation via le dossier en cours d'édition (Exclure le distanciel)
+        const draftOccupancy = (formData.enrollments || [])
+            .filter(e => 
+                e.courseId === courseId && 
+                e.status !== RegistrationStatus.CANCELLED &&
+                (e.formula === CourseFormula.ON_SITE || e.formula === CourseFormula.HYBRID)
+            ).length;
+            
+        return storedOccupancy + draftOccupancy;
+    };
+
+    const getRoomOccupancy = (roomName: string) => {
+        const room = settings?.rooms.find(r => r.name === roomName);
+        if (!room) return { current: 0, total: 0 };
+        
+        const coursesInRoom = courses.filter(c => c.room === roomName);
+        const total = coursesInRoom.reduce((acc, c) => acc + getCourseOccupancy(c.id), 0);
+        
+        return { current: total, total: room.capacity };
+    };
 
     // Camera States
     const [activeCameraIdx, setActiveCameraIdx] = useState<number | null>(null);
@@ -666,11 +721,10 @@ const RegistrationManagement: React.FC<RegistrationManagementProps> = ({
                                     </div>
                                     <div className="p-10 pl-20">
                                         <div className="flex justify-between items-center mb-6">
-                                            <p className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em]">Sélection des cours</p>
-                                            <select className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black dark:bg-slate-800" onChange={(e) => { 
+                                            <p className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em]">Sélection des cours & Disponibilités</p>
+                                            <select className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black dark:bg-slate-800 outline-none focus:ring-2 focus:ring-insan-orange" onChange={(e) => { 
                                                 const course = courses.find(c => c.id === e.target.value);
                                                 if (course) {
-                                                    // Prevent duplicates
                                                     const alreadyExists = formData.enrollments?.some(enr => enr.studentId === student.id && enr.courseId === course.id);
                                                     if (!alreadyExists) {
                                                         const priceConfig = pricing.coursePrices[course.id] || { onSite: 250, remote: 220 };
@@ -691,20 +745,35 @@ const RegistrationManagement: React.FC<RegistrationManagementProps> = ({
                                                 e.target.value = "";
                                             }}>
                                                 <option value="">+ Ajouter un cours...</option>
-                                                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                {courses.map(c => {
+                                                    const occ = getCourseOccupancy(c.id);
+                                                    const cap = c.capacity || 20;
+                                                    const remaining = cap - occ;
+                                                    const isFull = remaining <= 0;
+                                                    return (
+                                                        <option key={c.id} value={c.id} disabled={isFull}>
+                                                            {c.name} {isFull ? '(COMPLET)' : `(${remaining} places restantes)`}
+                                                        </option>
+                                                    );
+                                                })}
                                             </select>
                                         </div>
                                         <div className="space-y-3">
                                             {(formData.enrollments || []).filter(e => e.studentId === student.id).map((enr) => {
                                                 const c = courses.find(course => course.id === enr.courseId);
                                                 const isCancelled = enr.status === RegistrationStatus.CANCELLED;
-                                                
-                                                // Determine if this is a persisted enrollment from the database or a newly added one
-                                                // Check if it exists in the original 'editingDossier' and wasn't newly added during this session
                                                 const isPersisted = editingDossier?.enrollments?.some(e => 
                                                     String(e.studentId) === String(enr.studentId) && 
                                                     String(e.courseId) === String(enr.courseId)
                                                 );
+
+                                                // Availability logic for the UI item
+                                                const occ = getCourseOccupancy(enr.courseId);
+                                                const cap = c?.capacity || 20;
+                                                const remaining = cap - occ;
+                                                const isOverCapacity = remaining < 0; 
+                                                const roomStatus = getRoomOccupancy(c?.room || '');
+                                                const roomRemaining = roomStatus.total - roomStatus.current;
 
                                                 return (
                                                     <div key={`${enr.studentId}-${enr.courseId}`} className={`flex flex-col lg:flex-row items-center gap-6 p-5 border rounded-3xl group/enr shadow-sm transition-all ${isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 opacity-90' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}>
@@ -716,17 +785,25 @@ const RegistrationManagement: React.FC<RegistrationManagementProps> = ({
                                                                 <p className={`font-black text-base ${isCancelled ? 'text-red-800 dark:text-red-400 line-through' : 'text-slate-800 dark:text-white'}`}>
                                                                     {c?.name}
                                                                 </p>
-                                                                {isCancelled && (
-                                                                    <div className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-900/50 px-2 py-1 rounded-lg">
-                                                                        <AlertCircle size={12} className="text-red-600 dark:text-red-400"/>
-                                                                        <span className="text-[10px] font-black text-red-700 dark:text-red-300 uppercase tracking-wide">COURS ANNULÉ (Inactif)</span>
+                                                                {!isCancelled && (
+                                                                    <Badge color={isOverCapacity ? 'red' : remaining <= 2 ? 'orange' : 'green'}>
+                                                                        {Math.max(0, remaining)} PLACES RESTANTES
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-3 mt-1">
+                                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">
+                                                                    {c?.pole} 
+                                                                </p>
+                                                                {!isCancelled && (
+                                                                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                                                        <DoorOpen size={10}/> {c?.room} 
+                                                                        <span className={roomRemaining <= 0 ? 'text-red-500' : ''}>
+                                                                            ({Math.max(0, roomRemaining)} places restantes)
+                                                                        </span>
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">
-                                                                {c?.pole} 
-                                                                {isCancelled && <span className="ml-2 text-red-500 dark:text-red-400 font-bold">DÉSINSCRIT LE {new Date(enr.cancelledAt || Date.now()).toLocaleDateString()}</span>}
-                                                            </p>
                                                         </div>
                                                         
                                                         {!isCancelled && (
@@ -747,50 +824,15 @@ const RegistrationManagement: React.FC<RegistrationManagementProps> = ({
                                                         <div className="flex items-center gap-4">
                                                             <span className={`text-sm font-black ${isCancelled ? 'text-slate-400 line-through' : 'text-insan-blue dark:text-blue-400'}`}>{enr.basePrice + (enr.formulaSurcharge || 0)}€</span>
                                                             
-                                                            {/* Logic for Cancel/Delete/Restore - FIXED: Big explicit buttons with high Z-index */}
                                                             <div className="relative z-50 flex items-center gap-2">
                                                                 {isPersisted ? (
-                                                                    // EXISTING RECORD FROM DB
                                                                     isCancelled ? (
-                                                                        <button 
-                                                                            type="button" 
-                                                                            onClick={(e) => { 
-                                                                                e.preventDefault(); 
-                                                                                e.stopPropagation(); 
-                                                                                handleToggleEnrollmentStatus(enr.studentId, enr.courseId);
-                                                                            }} 
-                                                                            className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"
-                                                                        >
-                                                                            <RotateCcw size={14}/> RÉACTIVER LE COURS
-                                                                        </button>
+                                                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleEnrollmentStatus(enr.studentId, enr.courseId); }} className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"><RotateCcw size={14}/> RÉACTIVER</button>
                                                                     ) : (
-                                                                        <button 
-                                                                            type="button" 
-                                                                            onClick={(e) => { 
-                                                                                e.preventDefault(); 
-                                                                                e.stopPropagation(); 
-                                                                                handleToggleEnrollmentStatus(enr.studentId, enr.courseId);
-                                                                            }} 
-                                                                            className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer" 
-                                                                            title="Désinscrire cet élève de ce cours"
-                                                                        >
-                                                                            <Ban size={14}/> ANNULER CE COURS
-                                                                        </button>
+                                                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleEnrollmentStatus(enr.studentId, enr.courseId); }} className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"><Ban size={14}/> ANNULER</button>
                                                                     )
                                                                 ) : (
-                                                                    // NEW RECORD (DRAFT) - Always delete completely
-                                                                    <button 
-                                                                        type="button" 
-                                                                        onClick={(e) => { 
-                                                                            e.preventDefault(); 
-                                                                            e.stopPropagation(); 
-                                                                            handleDeleteEnrollment(enr.studentId, enr.courseId); 
-                                                                        }} 
-                                                                        className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-colors font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer z-50 relative"
-                                                                        title="Supprimer la ligne (Erreur de saisie)"
-                                                                    >
-                                                                        <Trash2 size={14}/> RETIRER
-                                                                    </button>
+                                                                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteEnrollment(enr.studentId, enr.courseId); }} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-colors font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer z-50 relative"><Trash2 size={14}/> RETIRER</button>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -909,7 +951,6 @@ const RegistrationManagement: React.FC<RegistrationManagementProps> = ({
                                         </div>
                                     )}
 
-                                    {/* Manual Discount Section */}
                                     <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
                                         <div>
                                             <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2"><Settings2 size={12}/> Remise Manuelle (en €)</label>

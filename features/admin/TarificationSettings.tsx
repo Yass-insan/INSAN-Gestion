@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
-import { PricingSettings, Course, Pole } from '../../types';
+import { PricingSettings, Course, Pole, InstituteSettings } from '../../types';
 import { Card, Button, PageHeader } from '../../components/ui/DesignSystem';
 import { Save, Euro, Percent, Package, Layers } from 'lucide-react';
+import { getTranslation } from '../../services/i18n';
 
 interface TarificationSettingsProps {
     pricing: PricingSettings;
     courses: Course[];
     poles: Pole[];
     onUpdate: (pricing: PricingSettings) => void;
+    settings?: InstituteSettings;
 }
 
-const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, courses, poles, onUpdate }) => {
+const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, courses, poles, onUpdate, settings }) => {
     const [localPricing, setLocalPricing] = useState<PricingSettings>(pricing);
+
+    const lang = settings?.language || 'fr';
+    const currency = settings?.currency || '€';
+    const t = (key: string) => getTranslation(key, lang);
 
     const handleSave = () => {
         onUpdate(localPricing);
@@ -21,9 +27,9 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
     return (
         <div className="space-y-8 animate-fade-in">
             <PageHeader 
-                title="Tarification & Règles" 
+                title={t('tarification')} 
                 subtitle="Définissez les prix des cours et les remises automatiques."
-                action={<Button onClick={handleSave} icon={<Save size={18}/>}>Enregistrer</Button>}
+                action={<Button onClick={handleSave} icon={<Save size={18}/>}>{t('save')}</Button>}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -54,7 +60,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                                         setLocalPricing({...localPricing, coursePrices: newPrices});
                                                     }}
                                                 />
-                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500">€</span>
+                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500">{currency}</span>
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end">
@@ -69,7 +75,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                                         setLocalPricing({...localPricing, coursePrices: newPrices});
                                                     }}
                                                 />
-                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500">€</span>
+                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500">{currency}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -91,36 +97,45 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                     <p className="font-bold text-sm text-slate-700 dark:text-slate-200">Frais de dossier</p>
                                     <p className="text-xs text-slate-400 dark:text-slate-500">Payés lors de la première inscription</p>
                                 </div>
-                                <input 
-                                    type="number" 
-                                    className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                    value={localPricing.dossierFees}
-                                    onChange={e => setLocalPricing({...localPricing, dossierFees: Number(e.target.value)})}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="number" 
+                                        className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
+                                        value={localPricing.dossierFees}
+                                        onChange={e => setLocalPricing({...localPricing, dossierFees: Number(e.target.value)})}
+                                    />
+                                    <span className="font-bold text-slate-400 dark:text-slate-500">{currency}</span>
+                                </div>
                             </div>
                             <div className="flex justify-between items-center">
                                 <div>
                                     <p className="font-bold text-sm text-slate-700 dark:text-slate-200">Supplément Hybride</p>
                                     <p className="text-xs text-slate-400 dark:text-slate-500">Ajout automatique si formule Hybride</p>
                                 </div>
-                                <input 
-                                    type="number" 
-                                    className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                    value={localPricing.hybridSurcharge}
-                                    onChange={e => setLocalPricing({...localPricing, hybridSurcharge: Number(e.target.value)})}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="number" 
+                                        className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
+                                        value={localPricing.hybridSurcharge}
+                                        onChange={e => setLocalPricing({...localPricing, hybridSurcharge: Number(e.target.value)})}
+                                    />
+                                    <span className="font-bold text-slate-400 dark:text-slate-500">{currency}</span>
+                                </div>
                             </div>
                             <div className="flex justify-between items-center">
                                 <div>
                                     <p className="font-bold text-sm text-slate-700 dark:text-slate-200">Formation Montessori</p>
                                     <p className="text-xs text-slate-400 dark:text-slate-500">Forfait nouveaux parents Enfance</p>
                                 </div>
-                                <input 
-                                    type="number" 
-                                    className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                    value={localPricing.montessoriFees}
-                                    onChange={e => setLocalPricing({...localPricing, montessoriFees: Number(e.target.value)})}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="number" 
+                                        className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
+                                        value={localPricing.montessoriFees}
+                                        onChange={e => setLocalPricing({...localPricing, montessoriFees: Number(e.target.value)})}
+                                    />
+                                    <span className="font-bold text-slate-400 dark:text-slate-500">{currency}</span>
+                                </div>
                             </div>
                         </div>
                     </Card>
@@ -146,16 +161,6 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                             discounts: { ...localPricing.discounts, multiCourse: Number(e.target.value) }
                                         })}
                                     />
-                                    <span className="font-bold text-slate-400 dark:text-slate-500">%</span>
-                                </div>
-                            </div>
-                            <div className="flex justify-between items-center opacity-50">
-                                <div>
-                                    <p className="font-bold text-sm text-slate-700 dark:text-slate-200">Réduction Multi-enfants</p>
-                                    <p className="text-xs text-slate-400 dark:text-slate-500">Bientôt disponible (gestion par Famille)</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <input disabled type="number" className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white" value={localPricing.discounts.multiChild} />
                                     <span className="font-bold text-slate-400 dark:text-slate-500">%</span>
                                 </div>
                             </div>
