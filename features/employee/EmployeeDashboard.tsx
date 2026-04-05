@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
-import { User, WorkSchedule, InstituteSettings, LeaveRequest, LeaveType, LeaveStatus } from '../../types';
+import { User, WorkSchedule, InstituteSettings, LeaveRequest, LeaveType, LeaveStatus, NewsItem } from '../../types';
 import { Card, Button, Badge } from '../../components/ui/DesignSystem';
-import { CalendarRange, Palmtree, Plus, X, AlertCircle, CheckCircle } from 'lucide-react';
+import { CalendarRange, Palmtree, Plus, X, AlertCircle, CheckCircle, Bell, Megaphone } from 'lucide-react';
 
 const SectionHeader = ({ title, icon: Icon }: { title: string, icon?: any }) => (
     <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-            {Icon && <div className="p-2 bg-white rounded-lg shadow-sm text-insan-orange border border-slate-100"><Icon size={20} /></div>}
+        <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight flex items-center gap-3">
+            {Icon && <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-insan-orange border border-slate-100 dark:border-slate-700"><Icon size={20} /></div>}
             {title}
         </h3>
     </div>
@@ -15,6 +15,7 @@ const SectionHeader = ({ title, icon: Icon }: { title: string, icon?: any }) => 
 
 interface EmployeeDashboardProps {
     user: User;
+    news?: NewsItem[];
     schedules?: WorkSchedule[];
     leaveRequests?: LeaveRequest[];
     settings?: InstituteSettings;
@@ -22,7 +23,7 @@ interface EmployeeDashboardProps {
     onManageLeave?: (action: 'add' | 'update', leave: LeaveRequest) => void;
 }
 
-export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, schedules = [], leaveRequests = [], onClockIn, settings, onManageLeave }) => {
+export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, news = [], schedules = [], leaveRequests = [], onClockIn, settings, onManageLeave }) => {
     const mySchedule = schedules.filter(s => s.userId === user.id).sort((a,b) => (a.dayOfWeek||0) - (b.dayOfWeek||0));
     const myLeaves = leaveRequests.filter(l => l.userId === user.id).sort((a,b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
     const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -132,7 +133,27 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, sche
                 
                 {/* Info Card instead of ClockIn */}
                 <div className="space-y-6">
-                    <Card className="p-6 bg-blue-50 border-blue-100">
+                    <Card className="p-8">
+                        <SectionHeader title="Actualités" icon={Bell} />
+                        <div className="space-y-4">
+                            {news.slice(0, 3).map(n => (
+                                <div key={n.id} className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-800 ${n.isUrgent ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20' : 'bg-white dark:bg-slate-900'}`}>
+                                    {(n.coverUrl || n.mediaUrl) && (
+                                        <img src={n.coverUrl || n.mediaUrl} className="w-full h-24 rounded-xl object-cover mb-3" alt="" referrerPolicy="no-referrer" />
+                                    )}
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{n.date}</span>
+                                        {n.isUrgent && <Badge color="red" className="text-[8px]">URGENT</Badge>}
+                                    </div>
+                                    <h4 className={`font-bold text-sm mb-1 ${n.isUrgent ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-white'}`}>{n.title}</h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{n.content}</p>
+                                </div>
+                            ))}
+                            {news.length === 0 && <p className="text-center py-6 text-slate-400 italic">Aucune actualité.</p>}
+                        </div>
+                    </Card>
+
+                    <Card className="p-6 bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20">
                         <h4 className="font-bold text-insan-blue mb-2">Informations RH</h4>
                         <p className="text-xs text-slate-600 leading-relaxed">
                             Pour toute modification de vos horaires contractuels, veuillez contacter la direction administrative via le chat interne.
