@@ -110,7 +110,7 @@ const PoleDashboard: React.FC<PoleDashboardProps> = ({ user, courses, attendance
                         <div className="space-y-4">
                             {news.slice(0, 4).map(n => (
                                 <div key={n.id} className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex gap-4 ${n.isUrgent ? 'bg-red-50/30 dark:bg-red-900/20 border-red-100 dark:border-red-900/30' : 'bg-white dark:bg-slate-800'}`}>
-                                    {n.mediaUrl && <img src={n.mediaUrl} className="w-20 h-20 rounded-xl object-cover shrink-0" alt="" />}
+                                    {(n.coverUrl || n.mediaUrl) && <img src={n.coverUrl || n.mediaUrl} className="w-20 h-20 rounded-xl object-cover shrink-0" alt="" referrerPolicy="no-referrer" />}
                                     <div className="flex-1">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{n.date}</span>
