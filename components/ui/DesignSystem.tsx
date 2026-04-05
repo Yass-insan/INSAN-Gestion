@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 // --- Card ---
 export interface CardProps {
@@ -17,6 +18,65 @@ export const Card: React.FC<CardProps> = ({ children, className = '', onClick, s
         {children}
     </div>
 );
+
+// --- Toast ---
+export type ToastType = 'success' | 'error' | 'info';
+
+interface Toast {
+    id: string;
+    message: string;
+    type: ToastType;
+}
+
+interface ToastContextType {
+    showToast: (message: string, type?: ToastType) => void;
+}
+
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
+
+export const useToast = () => {
+    const context = useContext(ToastContext);
+    if (!context) throw new Error('useToast must be used within a ToastProvider');
+    return context;
+};
+
+export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+    const showToast = useCallback((message: string, type: ToastType = 'success') => {
+        const id = Math.random().toString(36).substring(2, 9);
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 4000);
+    }, []);
+
+    return (
+        <ToastContext.Provider value={{ showToast }}>
+            {children}
+            <div className="fixed bottom-8 right-8 z-[9999] flex flex-col gap-3 pointer-events-none">
+                {toasts.map(toast => (
+                    <div 
+                        key={toast.id}
+                        className={`
+                            pointer-events-auto
+                            flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border backdrop-blur-md
+                            animate-slide-up transition-all duration-500
+                            ${toast.type === 'success' ? 'bg-emerald-50/90 dark:bg-emerald-950/80 border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-200' : 
+                              toast.type === 'error' ? 'bg-rose-50/90 dark:bg-rose-950/80 border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-200' : 
+                              'bg-blue-50/90 dark:bg-blue-950/80 border-blue-100 dark:border-blue-900/30 text-blue-800 dark:text-blue-200'}
+                        `}
+                    >
+                        {toast.type === 'success' && <CheckCircle size={20} className="text-emerald-500" />}
+                        {toast.type === 'error' && <AlertCircle size={20} className="text-rose-500" />}
+                        {toast.type === 'info' && <Info size={20} className="text-blue-500" />}
+                        <span className="font-bold text-sm uppercase tracking-wider">{toast.message}</span>
+                    </div>
+                ))}
+            </div>
+        </ToastContext.Provider>
+    );
+};
 
 // --- Button ---
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
