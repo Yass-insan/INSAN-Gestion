@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, Course, AttendanceRecord, UserRole, Homework, NewsItem, InstituteSettings, AttendanceStatus } from '../../types';
-import { Card, Button, Badge, PageHeader } from '../../components/ui/DesignSystem';
+import { Card, Button, Badge, PageHeader, useToast } from '../../components/ui/DesignSystem';
 import { Users, Clock, Check, X, ChevronRight, Save, UserCheck, AlertTriangle, BookOpen, Bell, Calendar, Plus, Trash2, FileText, AlertCircle } from 'lucide-react';
 
 interface ProfessorDashboardProps {
@@ -20,10 +20,13 @@ interface ProfessorDashboardProps {
 const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ 
     user, courses, attendance, users, onAddAttendance, news, homework, onManageHomework 
 }) => {
-    const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'homework'>('overview');
+    const { showToast } = useToast();
+    const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'homework' | 'planning'>('overview');
     const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
     const [tempAttendance, setTempAttendance] = useState<Record<string, AttendanceStatus>>({});
+
+    const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
     // Homework states
     const [isHomeworkModalOpen, setIsHomeworkModalOpen] = useState(false);
@@ -46,7 +49,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
         const entries = Object.entries(tempAttendance);
         
         if (entries.length === 0) {
-            alert("Veuillez marquer au moins un élève avant d'enregistrer.");
+            showToast("Veuillez marquer au moins un élève avant d'enregistrer.", "error");
             return;
         }
 
@@ -61,7 +64,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
             });
         });
 
-        alert(`Appel enregistré pour ${entries.length} étudiants.`);
+        showToast(`Appel enregistré pour ${entries.length} étudiants.`, "success");
         setTempAttendance({});
         setActiveTab('overview');
         setSelectedCourse(null);
@@ -80,7 +83,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
             });
             setIsHomeworkModalOpen(false);
             setNewHwTitle(''); setNewHwDesc(''); setNewHwDate(''); setNewHwCourseId('');
-            alert("Devoir ajouté au cahier de textes.");
+            showToast("Devoir ajouté au cahier de textes.", "success");
         }
     };
 
@@ -102,6 +105,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                 action={
                     <div className="flex bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                         <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'overview' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>Vue d'ensemble</button>
+                        <button onClick={() => setActiveTab('planning')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'planning' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>Mon Planning</button>
                         <button onClick={() => setActiveTab('homework')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'homework' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>Cahier de Textes</button>
                     </div>
                 }
@@ -142,10 +146,10 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                                 <h3 className="font-bold text-lg text-slate-800 dark:text-white">Actualités de l'Institut</h3>
                             </div>
                             <div className="space-y-4">
-                                {news.slice(0, 5).map(n => (
+                                 {news.slice(0, 5).map(n => (
                                     <div key={n.id} className={`pb-4 border-b border-slate-50 dark:border-slate-800 last:border-0 last:pb-0 flex gap-4 items-start ${n.isUrgent ? 'animate-pulse-subtle' : ''}`}>
-                                        {n.mediaUrl && (
-                                            <img src={n.mediaUrl} className="w-16 h-16 rounded-lg object-cover border border-slate-100 dark:border-slate-700 shadow-sm shrink-0" alt="" />
+                                        {(n.coverUrl || n.mediaUrl) && (
+                                            <img src={n.coverUrl || n.mediaUrl} className="w-16 h-16 rounded-lg object-cover border border-slate-100 dark:border-slate-700 shadow-sm shrink-0" alt="" referrerPolicy="no-referrer" />
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-center mb-1">
@@ -228,6 +232,59 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                             ))}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'planning' && (
+                <div className="animate-fade-in space-y-6">
+                    <Card className="p-8">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="p-2 bg-insan-blue/10 text-insan-blue rounded-lg"><Calendar size={20}/></div>
+                            <div>
+                                <h3 className="font-bold text-lg text-slate-800 dark:text-white">Mon Emploi du Temps</h3>
+                                <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Récapitulatif de vos cours hebdomadaires</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {myCourses.map(c => (
+                                <React.Fragment key={c.id}>
+                                    {/* Main Schedule */}
+                                    <div className="p-5 border border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-800/50 hover:border-insan-blue/30 transition-all">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="px-2 py-1 bg-insan-blue text-white text-[10px] font-bold rounded uppercase">{days[c.dayOfWeek]}</span>
+                                            <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Clock size={10}/> {c.startTime} - {c.endTime}</span>
+                                        </div>
+                                        <h4 className="font-bold text-slate-800 dark:text-white mb-1">{c.name}</h4>
+                                        <div className="flex items-center gap-2 mt-3">
+                                            <Badge color="gray" className="text-[9px]">Salle: {c.room}</Badge>
+                                            <Badge color="blue" className="text-[9px]">{getStudentsForCourse(c.id).length} Élèves</Badge>
+                                        </div>
+                                    </div>
+
+                                    {/* Additional Schedules */}
+                                    {(c.schedules || []).map((s, idx) => (
+                                        <div key={`${c.id}-extra-${idx}`} className="p-5 border border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-800/50 hover:border-insan-blue/30 transition-all">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <span className="px-2 py-1 bg-insan-blue text-white text-[10px] font-bold rounded uppercase">{days[s.dayOfWeek]}</span>
+                                                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Clock size={10}/> {s.startTime} - {s.endTime}</span>
+                                            </div>
+                                            <h4 className="font-bold text-slate-800 dark:text-white mb-1">{c.name}</h4>
+                                            <div className="flex items-center gap-2 mt-3">
+                                                <Badge color="gray" className="text-[9px]">Salle: {c.room}</Badge>
+                                                <Badge color="blue" className="text-[9px]">{getStudentsForCourse(c.id).length} Élèves</Badge>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </React.Fragment>
+                            ))}
+                            {myCourses.length === 0 && (
+                                <div className="col-span-full py-12 text-center border-2 border-dashed border-slate-100 dark:border-slate-700 rounded-3xl">
+                                    <p className="text-slate-400 italic">Aucun cours ne vous est actuellement assigné.</p>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
                 </div>
             )}
 
