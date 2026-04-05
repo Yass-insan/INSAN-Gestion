@@ -114,11 +114,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, news, courses
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {news.map(n => (
+                                 {news.map(n => (
                                     <Card key={n.id} className={`flex flex-col overflow-hidden h-full group ${n.isUrgent ? 'border-red-200 dark:border-red-900/50 ring-1 ring-red-100 dark:ring-red-900/30' : ''}`}>
-                                        {n.mediaUrl && (
-                                            <div className="w-full h-40 overflow-hidden relative">
-                                                <img src={n.mediaUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={n.title} />
+                                        {(n.coverUrl || n.mediaUrl) && (
+                                            <div className="w-full h-48 overflow-hidden relative">
+                                                <img src={n.coverUrl || n.mediaUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={n.title} referrerPolicy="no-referrer" />
                                                 {n.isUrgent && (
                                                     <div className="absolute top-3 right-3 animate-pulse">
                                                         <Badge color="red" icon={<AlertCircle size={10}/>}>URGENT</Badge>
@@ -129,10 +129,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, news, courses
                                         <div className="p-6 flex-1 flex flex-col">
                                             <div className="flex justify-between items-start mb-3">
                                                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{n.date}</span>
-                                                {!n.mediaUrl && n.isUrgent && <Badge color="red">URGENT</Badge>}
+                                                {!(n.coverUrl || n.mediaUrl) && n.isUrgent && <Badge color="red">URGENT</Badge>}
                                             </div>
                                             <h4 className={`font-bold text-lg mb-2 leading-tight ${n.isUrgent ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-white'}`}>{n.title}</h4>
                                             <p className="text-slate-600 dark:text-slate-400 text-sm line-clamp-3 mb-4 flex-1">{n.content}</p>
+                                            
+                                            {n.galleryUrls && n.galleryUrls.length > 0 && (
+                                                <div className="grid grid-cols-4 gap-2 mb-4">
+                                                    {n.galleryUrls.map((url, idx) => (
+                                                        <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800">
+                                                            <img src={url} className="w-full h-full object-cover hover:scale-110 transition-transform cursor-pointer" alt={`Gallery ${idx}`} referrerPolicy="no-referrer" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
                                             <div className="pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">
                                                 <span>Par {n.author}</span>
                                                 <button className="text-insan-blue dark:text-blue-400 hover:underline">Lire plus</button>
