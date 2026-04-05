@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PricingSettings, Course, Pole, InstituteSettings } from '../../types';
-import { Card, Button, PageHeader } from '../../components/ui/DesignSystem';
-import { Save, Euro, Percent, Package, Layers } from 'lucide-react';
+import { Card, Button, PageHeader, useToast } from '../../components/ui/DesignSystem';
+import { Save, Euro, Percent, Package, Layers, X } from 'lucide-react';
 import { getTranslation } from '../../services/i18n';
 
 interface TarificationSettingsProps {
@@ -14,6 +14,7 @@ interface TarificationSettingsProps {
 
 const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, courses, poles, onUpdate, settings }) => {
     const [localPricing, setLocalPricing] = useState<PricingSettings>(pricing);
+    const { showToast } = useToast();
 
     const lang = settings?.language || 'fr';
     const currency = settings?.currency || '€';
@@ -21,7 +22,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
 
     const handleSave = () => {
         onUpdate(localPricing);
-        alert("Configuration tarifaire mise à jour !");
+        showToast("Configuration tarifaire mise à jour !", "success");
     };
 
     return (
@@ -163,6 +164,68 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                     />
                                     <span className="font-bold text-slate-400 dark:text-slate-500">%</span>
                                 </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* 4. MODES DE RÈGLEMENT */}
+                    <Card className="p-8">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                            <Layers className="text-purple-600 dark:text-purple-400" size={20}/> Modes de Règlement
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap gap-2">
+                                {(localPricing.paymentMethods || []).map((method, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 group">
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{method}</span>
+                                        <button 
+                                            onClick={() => {
+                                                const newMethods = (localPricing.paymentMethods || []).filter((_, i) => i !== idx);
+                                                setLocalPricing({...localPricing, paymentMethods: newMethods});
+                                            }}
+                                            className="text-slate-400 hover:text-red-500 transition-colors"
+                                        >
+                                            <X size={14}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex gap-2">
+                                <input 
+                                    id="new-payment-method"
+                                    type="text" 
+                                    placeholder="Nouveau mode (ex: Chèque Vacances)" 
+                                    className="flex-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm font-bold bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-insan-blue/20"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            const input = e.currentTarget;
+                                            const val = input.value.trim();
+                                            if (val && !(localPricing.paymentMethods || []).includes(val)) {
+                                                setLocalPricing({
+                                                    ...localPricing, 
+                                                    paymentMethods: [...(localPricing.paymentMethods || []), val]
+                                                });
+                                                input.value = '';
+                                            }
+                                        }
+                                    }}
+                                />
+                                <Button 
+                                    onClick={() => {
+                                        const input = document.getElementById('new-payment-method') as HTMLInputElement;
+                                        const val = input.value.trim();
+                                        if (val && !(localPricing.paymentMethods || []).includes(val)) {
+                                            setLocalPricing({
+                                                ...localPricing, 
+                                                paymentMethods: [...(localPricing.paymentMethods || []), val]
+                                            });
+                                            input.value = '';
+                                        }
+                                    }}
+                                    variant="secondary"
+                                >
+                                    Ajouter
+                                </Button>
                             </div>
                         </div>
                     </Card>

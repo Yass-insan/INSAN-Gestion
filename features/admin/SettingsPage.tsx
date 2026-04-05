@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { InstituteSettings, Room } from '../../types';
-import { Card, Button } from '../../components/ui/DesignSystem';
-import { Settings, DoorOpen, Plus, X, Save, Users, Edit2, Check, Languages, Coins } from 'lucide-react';
+import { Card, Button, useToast } from '../../components/ui/DesignSystem';
+import { Settings, DoorOpen, Plus, X, Save, Users, Edit2, Check, Languages, Coins, FileSignature, FileText } from 'lucide-react';
 
 export const SettingsPage: React.FC<{ settings?: InstituteSettings, onUpdateSettings?: (s: InstituteSettings) => void }> = ({ settings, onUpdateSettings }) => {
-    const [editSettings, setEditSettings] = useState<InstituteSettings>(settings || { name: '', address: '', lat: 0, lng: 0, radius: 100, rooms: [], language: 'fr', currency: '€' });
+    const [editSettings, setEditSettings] = useState<InstituteSettings>(settings || { name: '', address: '', lat: 0, lng: 0, radius: 100, rooms: [], language: 'fr', currency: '€', cgv: '', cgvExcerpt: '' });
+    const { showToast } = useToast();
     
     // States for adding a new room
     const [newRoomName, setNewRoomName] = useState('');
@@ -17,7 +18,7 @@ export const SettingsPage: React.FC<{ settings?: InstituteSettings, onUpdateSett
     const handleSave = () => { 
         if (onUpdateSettings) { 
             onUpdateSettings(editSettings); 
-            alert("Paramètres de l'établissement enregistrés !"); 
+            showToast("Paramètres de l'établissement enregistrés !", "success"); 
         } 
     };
     
@@ -243,6 +244,39 @@ export const SettingsPage: React.FC<{ settings?: InstituteSettings, onUpdateSett
                                 <p className="text-slate-400 italic font-medium">Aucune salle n'est encore configurée dans l'établissement.</p>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                {/* GESTION DES CGV */}
+                <div className="pt-10 border-t border-slate-100 dark:border-slate-800">
+                    <h3 className="font-black text-xl text-slate-800 dark:text-white mb-6 flex items-center gap-3">
+                        <FileSignature size={24} className="text-insan-blue dark:text-blue-400"/> Conditions Générales de Vente
+                    </h3>
+                    
+                    <div className="space-y-8">
+                        <div>
+                            <label className="block text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <FileText size={14}/> Extrait des CGV (Affiché dans la modale de signature)
+                            </label>
+                            <textarea 
+                                value={editSettings.cgvExcerpt} 
+                                onChange={e => setEditSettings({...editSettings, cgvExcerpt: e.target.value})}
+                                placeholder="Un court résumé des points clés..."
+                                className="w-full border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-medium outline-none bg-slate-50 dark:bg-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-insan-blue/20 transition-all shadow-inner min-h-[120px]"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <FileSignature size={14}/> Texte complet des CGV
+                            </label>
+                            <textarea 
+                                value={editSettings.cgv} 
+                                onChange={e => setEditSettings({...editSettings, cgv: e.target.value})}
+                                placeholder="Le texte complet des CGV..."
+                                className="w-full border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-medium outline-none bg-slate-50 dark:bg-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-insan-blue/20 transition-all shadow-inner min-h-[300px]"
+                            />
+                        </div>
                     </div>
                 </div>
 
