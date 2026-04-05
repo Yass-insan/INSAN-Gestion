@@ -77,7 +77,7 @@ const Stats: React.FC<StatsProps> = ({ type, customData, customPieData }) => {
                                 <stop offset="95%" stopColor={COLORS.late} stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#e2e8f0" opacity={0.3} />
+                        <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="currentColor" opacity={0.1} />
                         <XAxis 
                             dataKey="name" 
                             tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
