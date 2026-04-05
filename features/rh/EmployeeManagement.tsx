@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, UserRole, WorkSchedule, Course, Pole, LeaveRequest, LeaveType, LeaveStatus, AttendanceRecord, GlobalHoliday } from '../../types';
 import { Card, Button, Badge, PageHeader } from '../../components/ui/DesignSystem';
 import { getStatusColor } from '../../services/utils';
@@ -66,15 +66,63 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
     const [formRate, setFormRate] = useState(15);
     const [formSecondaryRoles, setFormSecondaryRoles] = useState<UserRole[]>([]);
 
+    // Error & Confirmation States
+    const [formError, setFormError] = useState<string | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'employee' | 'schedule' | 'holiday' | null, item: any }>({ type: null, item: null });
+
     // Schedule Form
     const [schedType, setSchedType] = useState<'RECURRING' | 'EXCEPTION'>('RECURRING');
     const [schedDay, setSchedDay] = useState(1);
     const [schedDate, setSchedDate] = useState('');
     const [schedStart, setSchedStart] = useState('09:00');
     const [schedEnd, setSchedEnd] = useState('17:00');
+    const [schedBreakStart, setSchedBreakStart] = useState('');
+    const [schedBreakEnd, setSchedBreakEnd] = useState('');
     const [schedActivity, setSchedActivity] = useState('');
 
     const staff = users.filter(u => u.role !== UserRole.STUDENT && u.role !== UserRole.ADMIN);
+
+    const calculateDuration = (start: string, end: string, breakStart?: string, breakEnd?: string) => {
+        if (!start || !end) return 0;
+        const [h1, m1] = start.split(':').map(Number);
+        const [h2, m2] = end.split(':').map(Number);
+        let totalMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+        
+        if (breakStart && breakEnd) {
+            const [bh1, bm1] = breakStart.split(':').map(Number);
+            const [bh2, bm2] = breakEnd.split(':').map(Number);
+            const breakMinutes = (bh2 * 60 + bm2) - (bh1 * 60 + bm1);
+            if (breakMinutes > 0) {
+                totalMinutes -= breakMinutes;
+            }
+        }
+        
+        return Math.max(0, totalMinutes / 60);
+    };
+
+    const totalWeeklyHours = useMemo(() => {
+        if (!selectedEmployee) return 0;
+        
+        let total = 0;
+        
+        // Regular schedules
+        const empSchedules = schedules.filter(s => s.userId === selectedEmployee.id && s.type === 'RECURRING');
+        empSchedules.forEach(s => {
+            total += calculateDuration(s.startTime, s.endTime, s.breakStart, s.breakEnd);
+        });
+        
+        // Courses
+        const empCourses = courses.filter(c => c.professorIds.includes(selectedEmployee.id));
+        empCourses.forEach(c => {
+            total += calculateDuration(c.startTime, c.endTime);
+            (c.schedules || []).forEach(s => {
+                total += calculateDuration(s.startTime, s.endTime);
+            });
+        });
+        
+        return Math.round(total * 100) / 100;
+    }, [selectedEmployee, schedules, courses]);
+
     const filteredStaff = staff.filter(u => {
         const matchesSearch = u.name.toLowerCase().includes(staffSearch.toLowerCase()) || u.email.toLowerCase().includes(staffSearch.toLowerCase());
         const matchesRole = roleFilter === 'ALL' || u.role === roleFilter || u.secondaryRoles?.includes(roleFilter);
@@ -97,6 +145,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
     // --- Actions ---
 
     const openModal = (user?: User) => {
+        setFormError(null);
         if (user) {
             setEditingUser(user);
             setFormName(user.name);
@@ -124,6 +173,11 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
 
     const handleSaveUser = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!formName || !formEmail) {
+            setFormError("Le nom et l'email sont obligatoires.");
+            return;
+        }
+        setFormError(null);
         if (onManageUsers) {
              const userPayload: User = {
                 id: editingUser ? editingUser.id : Date.now().toString(),
@@ -141,10 +195,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
     };
 
     const handleDeleteUser = (user: User) => {
-        if(window.confirm(`Êtes-vous sûr de vouloir supprimer ${user.name} ? Cette action est irréversible.`)) {
-             onManageUsers?.('delete', user);
-             if (selectedEmployee?.id === user.id) setSelectedEmployee(null);
-        }
+        setDeleteConfirm({ type: 'employee', item: user });
     };
 
     const toggleSecondaryRole = (role: UserRole) => {
@@ -174,12 +225,16 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                 type: schedType,
                 startTime: schedStart,
                 endTime: schedEnd,
+                breakStart: schedBreakStart || undefined,
+                breakEnd: schedBreakEnd || undefined,
                 activityTitle: schedActivity || 'Travail',
                 dayOfWeek: schedType === 'RECURRING' ? schedDay : undefined,
                 date: schedType === 'EXCEPTION' ? schedDate : undefined
             };
             onManageSchedule('add', newSched);
             setIsScheduleModalOpen(false);
+            setSchedBreakStart('');
+            setSchedBreakEnd('');
         }
     };
 
@@ -294,26 +349,77 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                                 <div className="flex justify-between items-center mb-6">
                                     <div>
                                         <h3 className="font-bold text-xl text-slate-800 dark:text-white flex items-center gap-2"><CalendarRange className="text-insan-orange"/> Planning : {selectedEmployee.name}</h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">Gérez les horaires récurrents et les exceptions.</p>
+                                        <div className="flex items-center gap-4 mt-1">
+                                            <p className="text-sm text-slate-500 dark:text-slate-400">Gérez les horaires récurrents et les exceptions.</p>
+                                            <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700">
+                                                <Clock size={14} className="text-insan-blue"/>
+                                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{totalWeeklyHours}h / semaine</span>
+                                            </div>
+                                        </div>
                                     </div>
                                     <Button onClick={() => setIsScheduleModalOpen(true)} icon={<Plus size={16}/>}>Ajouter un créneau</Button>
                                 </div>
 
-                                <div className="space-y-6">
+                                <div className="space-y-8">
                                     <div>
-                                        <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Horaires Récurrents (Hebdomadaire)</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {schedules.filter(s => s.userId === selectedEmployee.id && s.type === 'RECURRING').sort((a,b) => (a.dayOfWeek || 0) - (b.dayOfWeek || 0)).map(s => (
-                                                <div key={s.id} className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl relative group hover:border-insan-blue/40 transition-colors shadow-sm">
-                                                    <div className="flex items-center gap-3 mb-2">
-                                                        <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-insan-blue dark:text-blue-300 text-xs font-bold rounded-md">{days[s.dayOfWeek || 0]}</span>
-                                                        <span className="text-slate-400 dark:text-slate-500 text-xs"><Clock size={12} className="inline mr-1"/>{s.startTime} - {s.endTime}</span>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Vue Hebdomadaire</h4>
+                                            <Badge color="blue">{courses.filter(c => c.professorIds.includes(selectedEmployee.id)).length} Cours assignés</Badge>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-7 gap-2">
+                                            {[1, 2, 3, 4, 5, 6, 0].map(dayIdx => {
+                                                const daySchedules = schedules.filter(s => s.userId === selectedEmployee.id && s.type === 'RECURRING' && s.dayOfWeek === dayIdx);
+                                                const dayCourses = courses.filter(c => c.professorIds.includes(selectedEmployee.id) && (c.dayOfWeek === dayIdx || (c.schedules || []).some(s => s.dayOfWeek === dayIdx)));
+                                                
+                                                return (
+                                                    <div key={dayIdx} className="flex flex-col gap-2">
+                                                        <div className="text-center py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                            <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">{days[dayIdx].substring(0, 3)}</span>
+                                                        </div>
+                                                        
+                                                        <div className="space-y-2 min-h-[200px]">
+                                                            {/* Regular Schedules */}
+                                                            {daySchedules.map(s => (
+                                                                <div key={s.id} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg relative group hover:border-insan-blue/40 transition-colors shadow-sm">
+                                                                    <p className="text-[9px] font-bold text-insan-blue mb-1">{s.startTime} - {s.endTime}</p>
+                                                                    <p className="font-bold text-slate-700 dark:text-slate-200 text-[10px] leading-tight truncate">{s.activityTitle}</p>
+                                                                    {s.breakStart && s.breakEnd && (
+                                                                        <div className="mt-1 text-[8px] text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900/50 p-1 rounded border border-slate-100 dark:border-slate-800">
+                                                                            P: {s.breakStart}-{s.breakEnd}
+                                                                        </div>
+                                                                    )}
+                                                                    <button onClick={() => setDeleteConfirm({ type: 'schedule', item: s })} className="absolute -top-1 -right-1 bg-white dark:bg-slate-800 shadow-md rounded-full p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity border border-slate-100 dark:border-slate-700"><X size={10}/></button>
+                                                                </div>
+                                                            ))}
+                                                            
+                                                            {/* Courses */}
+                                                            {dayCourses.map(c => {
+                                                                const relevantSchedules = [];
+                                                                if (c.dayOfWeek === dayIdx) relevantSchedules.push({ start: c.startTime, end: c.endTime });
+                                                                (c.schedules || []).forEach(s => {
+                                                                    if (s.dayOfWeek === dayIdx) relevantSchedules.push({ start: s.startTime, end: s.endTime });
+                                                                });
+                                                                
+                                                                return relevantSchedules.map((rs, idx) => (
+                                                                    <div key={`${c.id}-${dayIdx}-${idx}`} className="p-2 bg-blue-50/50 dark:bg-blue-900/20 border border-insan-blue/30 dark:border-blue-800/50 rounded-lg relative group hover:border-insan-blue transition-colors shadow-sm">
+                                                                        <p className="text-[9px] font-bold text-insan-blue mb-1">{rs.start} - {rs.end}</p>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <div className="w-1 h-1 rounded-full bg-insan-blue shrink-0"></div>
+                                                                            <p className="font-bold text-slate-800 dark:text-white text-[10px] leading-tight truncate">{c.name}</p>
+                                                                        </div>
+                                                                        <p className="text-[8px] text-slate-500 dark:text-slate-400 mt-1">Salle: {c.room}</p>
+                                                                    </div>
+                                                                ));
+                                                            })}
+                                                            
+                                                            {daySchedules.length === 0 && dayCourses.length === 0 && (
+                                                                <div className="h-full border-2 border-dashed border-slate-100 dark:border-slate-800/50 rounded-xl"></div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">{s.activityTitle}</p>
-                                                    <button onClick={() => onManageSchedule?.('delete', s)} className="absolute top-2 right-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><X size={16}/></button>
-                                                </div>
-                                            ))}
-                                            {schedules.filter(s => s.userId === selectedEmployee.id && s.type === 'RECURRING').length === 0 && <p className="text-sm text-slate-400 dark:text-slate-500 italic">Aucun horaire récurrent.</p>}
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
@@ -327,7 +433,12 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                                                         <span className="text-orange-400 text-xs font-bold">{s.startTime} - {s.endTime}</span>
                                                     </div>
                                                     <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{s.activityTitle}</p>
-                                                    <button onClick={() => onManageSchedule?.('delete', s)} className="absolute top-2 right-2 text-orange-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><X size={16}/></button>
+                                                    {s.breakStart && s.breakEnd && (
+                                                        <div className="mt-2 text-[10px] text-orange-400 dark:text-orange-300 bg-white/50 dark:bg-slate-900/50 p-1.5 rounded-lg border border-orange-100 dark:border-orange-900/30 flex items-center gap-2">
+                                                            <Clock4 size={10}/> Pause: {s.breakStart} - {s.breakEnd}
+                                                        </div>
+                                                    )}
+                                                    <button onClick={() => setDeleteConfirm({ type: 'schedule', item: s })} className="absolute top-2 right-2 text-orange-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><X size={16}/></button>
                                                 </div>
                                             ))}
                                              {schedules.filter(s => s.userId === selectedEmployee.id && s.type === 'EXCEPTION').length === 0 && <p className="text-sm text-slate-400 dark:text-slate-500 italic">Aucune exception programmée.</p>}
@@ -514,7 +625,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                                                 <Badge color="gray">{getDurationInDays(h.startDate, h.endDate)}j</Badge>
                                             </div>
                                         </div>
-                                        <button onClick={() => onManageGlobalHoliday && onManageGlobalHoliday('delete', h)} className="text-slate-300 hover:text-red-500 transition-colors"><X size={14}/></button>
+                                        <button onClick={() => setDeleteConfirm({ type: 'holiday', item: h })} className="text-slate-300 hover:text-red-500 transition-colors"><X size={14}/></button>
                                     </div>
                                 ))}
                                 {globalHolidays.length === 0 && <p className="text-slate-400 dark:text-slate-500 italic text-xs text-center py-2">Aucune période définie.</p>}
@@ -781,14 +892,19 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
 
             {/* Modal - Add/Edit Staff (Unified) */}
             {isAddModalOpen && (
-                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                     <Card className="w-full max-w-xl animate-fade-in max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900">
+                 <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto py-10">
+                     <Card className="w-full max-w-xl animate-fade-in bg-white dark:bg-slate-900">
                         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
                             <h3 className="font-bold text-lg text-slate-800 dark:text-white">{editingUser ? 'Modifier le profil' : 'Ajouter un collaborateur'}</h3>
                             <button onClick={() => setIsAddModalOpen(false)} className="hover:bg-slate-200 dark:hover:bg-slate-700 p-2 rounded-full transition-colors text-slate-500 dark:text-slate-400"><X size={20} /></button>
                         </div>
-                        <form onSubmit={handleSaveUser} className="p-8 space-y-4">
-                            <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Nom Complet</label><input required type="text" value={formName} onChange={e => setFormName(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-insan-blue/20 bg-white dark:bg-slate-800 dark:text-white" /></div>
+            <form onSubmit={handleSaveUser} className="p-8 space-y-4">
+                {formError && (
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-xs font-bold animate-shake">
+                        <AlertTriangle size={16}/> {formError}
+                    </div>
+                )}
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Nom Complet</label><input required type="text" value={formName} onChange={e => setFormName(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-insan-blue/20 bg-white dark:bg-slate-800 dark:text-white" /></div>
                             <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Email Professionnel</label><input required type="email" value={formEmail} onChange={e => setFormEmail(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-insan-blue/20 bg-white dark:bg-slate-800 dark:text-white" /></div>
                             
                             <div className="grid grid-cols-2 gap-4">
@@ -835,7 +951,12 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                                 </div>
                             </div>
 
-                            <Button type="submit" className="w-full mt-4">{editingUser ? 'Mettre à jour' : 'Créer le profil'}</Button>
+                            <div className="flex gap-3 mt-4">
+                                {editingUser && (
+                                    <Button variant="danger" className="flex-1" type="button" onClick={() => { setIsAddModalOpen(false); handleDeleteUser(editingUser); }} icon={<Trash2 size={18}/>}>Supprimer</Button>
+                                )}
+                                <Button type="submit" className="flex-1">{editingUser ? 'Mettre à jour' : 'Créer le profil'}</Button>
+                            </div>
                         </form>
                     </Card>
                 </div>
@@ -843,7 +964,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
 
             {/* Modal - Add Schedule */}
             {isScheduleModalOpen && (
-                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                 <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto py-10">
                      <Card className="w-full max-w-md animate-fade-in bg-white dark:bg-slate-900">
                         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
                             <h3 className="font-bold text-lg text-slate-800 dark:text-white">Ajouter un créneau</h3>
@@ -873,6 +994,15 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Début</label><input type="time" value={schedStart} onChange={e => setSchedStart(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white outline-none" /></div>
                                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Fin</label><input type="time" value={schedEnd} onChange={e => setSchedEnd(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white outline-none" /></div>
                             </div>
+
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
+                                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Pause (Optionnel)</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Début Pause</label><input type="time" value={schedBreakStart} onChange={e => setSchedBreakStart(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs bg-white dark:bg-slate-800 dark:text-white outline-none" /></div>
+                                    <div><label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Fin Pause</label><input type="time" value={schedBreakEnd} onChange={e => setSchedBreakEnd(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs bg-white dark:bg-slate-800 dark:text-white outline-none" /></div>
+                                </div>
+                            </div>
+
                             <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Activité / Motif</label><input type="text" placeholder="Ex: Permanence, Réunion..." value={schedActivity} onChange={e => setSchedActivity(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white outline-none" /></div>
                             
                             <Button onClick={handleAddSchedule} className="w-full mt-4">Enregistrer</Button>
@@ -883,8 +1013,8 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
 
             {/* --- NEW: COMPREHENSIVE LEAVE HISTORY MODAL --- */}
             {isLeaveHistoryModalOpen && historyEmployee && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4">
-                    <Card className="w-full max-w-4xl animate-fade-in max-h-[90vh] overflow-hidden flex flex-col bg-white dark:bg-slate-900">
+                <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/80 backdrop-blur-xl p-4 overflow-y-auto py-10">
+                    <Card className="w-full max-w-4xl animate-fade-in bg-white dark:bg-slate-900">
                         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800">
                             <div className="flex items-center gap-4">
                                 <img src={historyEmployee.avatar} className="w-12 h-12 rounded-xl object-cover border-2 border-white dark:border-slate-600 shadow-sm"/>
@@ -973,6 +1103,41 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                         </div>
                         <div className="p-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 text-right">
                             <Button onClick={() => setIsLeaveHistoryModalOpen(false)}>Fermer</Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+            {/* MODAL CONFIRMATION SUPPRESSION */}
+            {deleteConfirm.type && (
+                <div className="fixed inset-0 z-[200] flex items-start justify-center bg-slate-900/80 backdrop-blur-md p-4 overflow-y-auto py-10">
+                    <Card className="w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl rounded-[2.5rem] overflow-hidden">
+                        <div className="p-8 text-center space-y-6">
+                            <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                <Trash2 size={40}/>
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2">Confirmer la suppression</h3>
+                                <p className="text-slate-500 dark:text-slate-400 font-bold text-sm">
+                                    {deleteConfirm.type === 'employee' && `Êtes-vous sûr de vouloir supprimer l'employé "${deleteConfirm.item?.name}" ? Cette action supprimera également ses accès.`}
+                                    {deleteConfirm.type === 'schedule' && `Supprimer ce créneau de travail (${deleteConfirm.item?.startTime} - ${deleteConfirm.item?.endTime}) ?`}
+                                    {deleteConfirm.type === 'holiday' && `Supprimer la période de vacances "${deleteConfirm.item?.name}" ?`}
+                                    <br/>Cette action est irréversible.
+                                </p>
+                            </div>
+                            <div className="flex gap-4 pt-4">
+                                <Button variant="secondary" className="flex-1" onClick={() => setDeleteConfirm({ type: null, item: null })}>Annuler</Button>
+                                <Button variant="danger" className="flex-1" onClick={() => {
+                                    if (deleteConfirm.type === 'employee') {
+                                        onManageUsers?.('delete', deleteConfirm.item);
+                                        if (selectedEmployee?.id === deleteConfirm.item.id) setSelectedEmployee(null);
+                                    } else if (deleteConfirm.type === 'schedule') {
+                                        onManageSchedule?.('delete', deleteConfirm.item);
+                                    } else if (deleteConfirm.type === 'holiday') {
+                                        onManageGlobalHoliday?.('delete', deleteConfirm.item);
+                                    }
+                                    setDeleteConfirm({ type: null, item: null });
+                                }}>Supprimer</Button>
+                            </div>
                         </div>
                     </Card>
                 </div>
