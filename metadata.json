@@ -1,8 +1,0 @@
-{
-  "name": "Insan Institute Attendance",
-  "description": "Student attendance tracking, homework management, and administrative dashboard for Institut Insan.",
-  "requestFramePermissions": [
-    "geolocation",
-    "camera"
-  ]
-}
