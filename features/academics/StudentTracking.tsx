@@ -151,13 +151,13 @@ const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, 
                                 <div className="flex gap-2">
                                     <button 
                                         onClick={() => setSelectedStatus(FollowUpStatus.CONTACTED)} 
-                                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase border-2 transition-all flex items-center justify-center gap-2 ${selectedStatus === FollowUpStatus.CONTACTED ? 'bg-green-50 border-green-500 text-green-700 shadow-md scale-[1.02]' : 'bg-white dark:bg-slate-800 border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase border-2 transition-all flex items-center justify-center gap-2 ${selectedStatus === FollowUpStatus.CONTACTED ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-400 shadow-md scale-[1.02]' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400 hover:border-slate-200 dark:hover:border-slate-600'}`}
                                     >
                                         <CheckCircle size={14}/> Famille Jointe
                                     </button>
                                     <button 
                                         onClick={() => setSelectedStatus(FollowUpStatus.NO_ANSWER)} 
-                                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase border-2 transition-all flex items-center justify-center gap-2 ${selectedStatus === FollowUpStatus.NO_ANSWER ? 'bg-red-50 border-red-500 text-red-700 shadow-md scale-[1.02]' : 'bg-white dark:bg-slate-800 border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase border-2 transition-all flex items-center justify-center gap-2 ${selectedStatus === FollowUpStatus.NO_ANSWER ? 'bg-red-50 dark:bg-red-900/20 border-red-500 text-red-700 dark:text-red-400 shadow-md scale-[1.02]' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400 hover:border-slate-200 dark:hover:border-slate-600'}`}
                                     >
                                         <XCircle size={14}/> Sans Réponse
                                     </button>
@@ -442,19 +442,19 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
             {selectedClassId ? (
                 <div className="space-y-8 animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <Card className="p-5 border-l-4 border-insan-blue bg-blue-50/20 dark:bg-blue-900/10 shadow-sm">
+                        <Card className="p-5 border-l-4 border-insan-blue bg-blue-50/20 dark:bg-blue-900/20 shadow-sm">
                             <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Présence Moyenne</p>
                             <p className="text-3xl font-black text-slate-800 dark:text-white">{classStats?.avgPresence}%</p>
                         </Card>
-                        <Card className="p-5 border-l-4 border-red-500 bg-red-50/20 dark:bg-red-900/10 shadow-sm">
-                            <p className="text-[10px] font-black text-red-600 dark:text-blue-400 uppercase tracking-widest mb-1">Taux d'absence</p>
+                        <Card className="p-5 border-l-4 border-red-500 bg-red-50/20 dark:bg-red-900/20 shadow-sm">
+                            <p className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1">Taux d'absence</p>
                             <p className="text-3xl font-black text-red-600">{classStats?.avgAbsence}%</p>
                         </Card>
-                        <Card className="p-5 border-l-4 border-insan-orange bg-orange-50/20 dark:bg-orange-900/10 shadow-sm">
+                        <Card className="p-5 border-l-4 border-insan-orange bg-orange-50/20 dark:bg-orange-900/20 shadow-sm">
                             <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Taux de Retard</p>
                             <p className="text-3xl font-black text-orange-600">{classStats?.avgLate}%</p>
                         </Card>
-                        <Card className="p-5 border-l-4 border-green-500 bg-green-50/20 dark:bg-green-900/10 shadow-sm">
+                        <Card className="p-5 border-l-4 border-green-500 bg-green-50/20 dark:bg-green-900/20 shadow-sm">
                             <p className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Effectif</p>
                             <p className="text-3xl font-black text-slate-800 dark:text-white">{classStats?.totalStudents} Élèves</p>
                         </Card>
@@ -521,14 +521,22 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                     </div>
                                     <h3 className="text-xl font-black text-slate-800 dark:text-white mb-1 group-hover:text-insan-blue transition-colors">{course.name}</h3>
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">{course.pole}</p>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Effectif</p>
-                                            <p className="text-xl font-black text-slate-800 dark:text-white">{cStats.totalStudents}</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100/20 dark:border-blue-800/20">
+                                            <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Présence Moyenne</p>
+                                            <p className="text-lg font-black text-slate-800 dark:text-white">{cStats.avgPresence}%</p>
                                         </div>
-                                        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Absences</p>
-                                            <p className="text-xl font-black text-red-500">{cStats.avgAbsence}%</p>
+                                        <div className="p-3 bg-red-50/50 dark:bg-red-900/10 rounded-xl border border-red-100/20 dark:border-red-800/20">
+                                            <p className="text-[8px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1">Taux d'absence</p>
+                                            <p className="text-lg font-black text-red-600">{cStats.avgAbsence}%</p>
+                                        </div>
+                                        <div className="p-3 bg-orange-50/50 dark:bg-orange-900/10 rounded-xl border border-orange-100/20 dark:border-orange-800/20">
+                                            <p className="text-[8px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Taux de Retard</p>
+                                            <p className="text-lg font-black text-orange-600">{cStats.avgLate}%</p>
+                                        </div>
+                                        <div className="p-3 bg-green-50/50 dark:bg-green-900/10 rounded-xl border border-green-100/20 dark:border-green-800/20">
+                                            <p className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Effectif</p>
+                                            <p className="text-lg font-black text-slate-800 dark:text-white">{cStats.totalStudents}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -590,20 +598,20 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                 <div className="space-y-8 animate-fade-in">
                     {/* KPIs WORKFLOW */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <Card className="p-5 border-l-4 border-insan-orange bg-orange-50/30 dark:bg-orange-900/10 shadow-sm">
+                        <Card className="p-5 border-l-4 border-insan-orange bg-orange-50/30 dark:bg-orange-900/20 shadow-sm">
                             <p className="text-[10px] font-black text-orange-700 dark:text-orange-400 uppercase tracking-widest">Inbox : À Traiter</p>
                             <p className="text-3xl font-black text-slate-800 dark:text-white mt-1">{stats.toContact}</p>
-                            <p className="text-[10px] text-slate-400 mt-1 font-bold flex items-center gap-1"><PhoneCall size={10}/> Appels prioritaires</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-bold flex items-center gap-1"><PhoneCall size={10}/> Appels prioritaires</p>
                         </Card>
-                        <Card className="p-5 border-l-4 border-red-500 bg-red-50/30 dark:bg-red-900/10 shadow-sm">
+                        <Card className="p-5 border-l-4 border-red-500 bg-red-50/30 dark:bg-red-900/20 shadow-sm">
                             <p className="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-widest">Sans Réponse</p>
                             <p className="text-3xl font-black text-red-600 dark:text-red-400 mt-1">{stats.noAnswer}</p>
-                            <p className="text-[10px] text-slate-400 mt-1 font-bold flex items-center gap-1"><AlertTriangle size={10}/> Relances à prévoir</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-bold flex items-center gap-1"><AlertTriangle size={10}/> Relances à prévoir</p>
                         </Card>
-                        <Card className="p-5 border-l-4 border-green-500 bg-green-50/30 dark:bg-green-900/10 shadow-sm">
+                        <Card className="p-5 border-l-4 border-green-500 bg-green-50/30 dark:bg-green-900/20 shadow-sm">
                             <p className="text-[10px] font-black text-green-700 dark:text-green-400 uppercase tracking-widest">Dossiers Clos</p>
                             <p className="text-3xl font-black text-green-600 dark:text-green-400 mt-1">{stats.archived}</p>
-                            <p className="text-[10px] text-slate-400 mt-1 font-bold flex items-center gap-1"><CheckCircle size={10}/> Familles jointes</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-bold flex items-center gap-1"><CheckCircle size={10}/> Familles jointes</p>
                         </Card>
                         <Card className="p-5 flex flex-col justify-between shadow-sm">
                             <div>
