@@ -23,9 +23,10 @@ import {
     Briefcase,
     GraduationCap,
     CheckCircle,
-    MoreHorizontal
+    MoreHorizontal,
+    FileText
 } from 'lucide-react';
-import { User, ChatMessage, ChatRoom, ChatRoomType, UserRole, Course, Pole, AttendanceRecord } from '../types';
+import { User, ChatMessage, ChatRoom, ChatRoomType, UserRole, Course, Pole, AttendanceRecord, Notification, RegistrationDossier } from '../types';
 import { Button, Badge } from './ui/DesignSystem';
 import { getStudentStats } from '../services/utils';
 
@@ -35,6 +36,10 @@ interface ChatProps {
     courses: Course[];
     poles: Pole[];
     attendance: AttendanceRecord[];
+    dossiers: RegistrationDossier[];
+    onAddNotification: (notif: Omit<Notification, 'id' | 'read' | 'time'>) => void;
+    onNavigate: (view: string, targetId?: string) => void;
+    initialRoomId?: string | null;
 }
 
 interface Community {
@@ -43,12 +48,12 @@ interface Community {
     isSystem?: boolean;
 }
 
-const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attendance }) => {
+const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attendance, dossiers, onAddNotification, onNavigate, initialRoomId }) => {
     // --- STATE ---
     const [rooms, setRooms] = useState<ChatRoom[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [communities, setCommunities] = useState<Community[]>([]);
-    const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+    const [activeRoomId, setActiveRoomId] = useState<string | null>(initialRoomId || null);
     const [inputText, setInputText] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -60,6 +65,8 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
     
     // Member View State
     const [viewingMember, setViewingMember] = useState<User | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     
     // Create Form States
     const [newItemName, setNewItemName] = useState('');
@@ -78,85 +85,208 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // --- INITIALIZATION ---
+    // --- DATA FETCHING ---
     useEffect(() => {
-        const poleCommunities = poles.map(p => ({ id: p.id, name: p.name, isSystem: true }));
-        setCommunities(prev => {
-            const custom = prev.filter(c => !c.isSystem);
-            const generalExists = custom.find(c => c.id === 'GENERAL');
-            const generalComm = generalExists ? [] : [{ id: 'GENERAL', name: 'Général', isSystem: true }];
-            const allComms = [...generalComm, ...poleCommunities, ...custom];
-            const uniqueComms = Array.from(new Map(allComms.map(item => [item.id, item])).values());
-            return uniqueComms;
-        });
+        const fetchData = async () => {
+            try {
+                const response = await fetch('/api/chat/data');
+                const data = await response.json();
+                
+                if (data.rooms && data.rooms.length > 0) {
+                    setRooms(data.rooms);
+                    setMessages(data.messages || []);
+                    if (data.communities) {
+                        setCommunities(prev => {
+                            const custom = data.communities.filter((c: any) => !c.isSystem);
+                            const poleKeys = poles.map(p => p.id);
+                            const allComms = [...prev.filter(c => c.isSystem), ...custom];
+                            return Array.from(new Map(allComms.map(item => [item.id, item])).values());
+                        });
+                    }
+                    if (initialRoomId) {
+                        setActiveRoomId(initialRoomId);
+                    } else if (data.rooms.length > 0) {
+                        setActiveRoomId(data.rooms[0].id);
+                    }
+                } else {
+                    // One-time initialization if server is empty
+                    initializeDefaultData();
+                }
+            } catch (err) {
+                console.error("Failed to fetch chat data:", err);
+                initializeDefaultData();
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
 
-        setExpandedSections(prev => {
-            const defaults: Record<string, boolean> = { 'GENERAL': true };
-            poles.forEach(p => defaults[p.id] = true);
-            return { ...defaults, ...prev };
-        });
+    // --- DATA AUTO-SAVE ---
+    useEffect(() => {
+        if (isLoading) return;
+        
+        const saveData = async () => {
+            setIsSaving(true);
+            try {
+                await fetch('/api/chat/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rooms,
+                        messages,
+                        communities: communities.filter(c => !c.isSystem)
+                    })
+                });
+            } catch (err) {
+                console.error("Failed to save chat data:", err);
+            } finally {
+                setIsSaving(false);
+            }
+        };
 
-        if (rooms.length === 0) {
-            const classRooms: ChatRoom[] = courses.map(c => {
-                const professorIds = c.professorIds || [];
-                const students = users.filter(u => u.role === UserRole.STUDENT && u.classId === c.id).map(u => u.id);
-                return {
-                    id: `class-${c.id}`,
-                    name: c.name,
-                    type: ChatRoomType.CLASS,
-                    courseId: c.id,
-                    communityId: c.pole, 
-                    memberIds: [...professorIds, ...students],
-                    adminIds: [...professorIds, '1'],
-                    createdAt: new Date().toISOString()
-                };
-            });
+        const timer = setTimeout(saveData, 1000);
+        return () => clearTimeout(timer);
+    }, [rooms, messages, communities, isLoading]);
 
-            const poleGeneralRooms: ChatRoom[] = poles.map(p => ({
-                id: `pole-general-${p.id}`,
-                name: `Annonces ${p.name}`,
-                type: ChatRoomType.GROUP,
-                communityId: p.id,
-                memberIds: users.map(u => u.id),
-                adminIds: users.filter(u => u.role === UserRole.ADMIN || u.managedPole === p.id).map(u => u.id),
-                createdAt: new Date().toISOString()
-            }));
-
-            const generalRoom: ChatRoom = {
-                id: 'general',
-                name: 'Annonces Générales',
-                type: ChatRoomType.GROUP,
-                communityId: 'GENERAL',
-                memberIds: users.map(u => u.id),
-                adminIds: users.filter(u => u.role === UserRole.ADMIN).map(u => u.id),
-                createdAt: new Date().toISOString()
-            };
-
-            const staffRoom: ChatRoom = {
-                id: 'staff',
-                name: 'Salle des Profs',
-                type: ChatRoomType.GROUP,
-                communityId: 'GENERAL',
-                memberIds: users.filter(u => u.role !== UserRole.STUDENT).map(u => u.id),
-                adminIds: users.filter(u => u.role === UserRole.ADMIN).map(u => u.id),
-                createdAt: new Date().toISOString()
-            };
-
-            const allInitialRooms = [...poleGeneralRooms, ...classRooms, generalRoom, staffRoom];
-            const visibleRooms = allInitialRooms.filter(r => 
-                currentUser.role === UserRole.ADMIN || 
-                r.memberIds.includes(currentUser.id) || 
-                r.adminIds.includes(currentUser.id)
-            );
-
-            setRooms(visibleRooms);
-            if (visibleRooms.length > 0) setActiveRoomId(visibleRooms[0].id);
-
-            setMessages([
-                { id: '1', roomId: 'general', senderId: '1', senderName: 'Admin Insan', content: 'Bienvenue sur la messagerie.', timestamp: new Date().toISOString() }
-            ]);
+    useEffect(() => {
+        if (initialRoomId) {
+            setActiveRoomId(initialRoomId);
         }
-    }, [courses, users, poles]);
+    }, [initialRoomId]);
+
+    // --- INITIALIZATION HELPERS ---
+    const initializeDefaultData = () => {
+        const poleCommunities = poles.map(p => ({ id: p.id, name: p.name, isSystem: true }));
+        const generalComm = { id: 'GENERAL', name: 'Général', isSystem: true };
+        const initialComms = [generalComm, ...poleCommunities];
+        setCommunities(initialComms);
+
+        const defaults: Record<string, boolean> = { 'GENERAL': true };
+        poles.forEach(p => defaults[p.id] = true);
+        setExpandedSections(defaults);
+
+        const classRooms: ChatRoom[] = courses.map(c => {
+            const professorIds = c.professorIds || [];
+            const students = users.filter(u => u.role === UserRole.STUDENT && u.classId === c.id).map(u => u.id);
+            const poleManagers = users.filter(u => u.managedPoleIds?.includes(c.pole)).map(u => u.id);
+            return {
+                id: `class-${c.id}`,
+                name: c.name,
+                type: ChatRoomType.CLASS,
+                courseId: c.id,
+                communityId: c.pole, 
+                memberIds: Array.from(new Set([...professorIds, ...students, ...poleManagers])),
+                adminIds: Array.from(new Set([...professorIds, ...poleManagers, '1'])),
+                createdAt: new Date().toISOString(),
+                settings: {
+                    canMembersAddOthers: false,
+                    canMembersSendMessages: true,
+                    canMembersCreateGroups: false
+                }
+            };
+        });
+
+        const poleGeneralRooms: ChatRoom[] = poles.map(p => ({
+            id: `pole-general-${p.id}`,
+            name: `Annonces ${p.name}`,
+            type: ChatRoomType.GROUP,
+            communityId: p.id,
+            memberIds: users.filter(u => u.role === UserRole.ADMIN || u.managedPoleIds?.includes(p.id) || (u.role === UserRole.STUDENT && courses.some(c => c.pole === p.id && u.classId === c.id))).map(u => u.id),
+            adminIds: users.filter(u => u.role === UserRole.ADMIN || u.managedPoleIds?.includes(p.id)).map(u => u.id),
+            createdAt: new Date().toISOString(),
+            settings: {
+                canMembersAddOthers: false,
+                canMembersSendMessages: currentUser.role === UserRole.ADMIN,
+                canMembersCreateGroups: false
+            }
+        }));
+
+        const generalRoom: ChatRoom = {
+            id: 'general',
+            name: 'Annonces Générales',
+            type: ChatRoomType.GROUP,
+            communityId: 'GENERAL',
+            memberIds: users.map(u => u.id),
+            adminIds: users.filter(u => u.role === UserRole.ADMIN).map(u => u.id),
+            createdAt: new Date().toISOString(),
+            settings: {
+                canMembersAddOthers: false,
+                canMembersSendMessages: false,
+                canMembersCreateGroups: false
+            }
+        };
+
+        const staffRoom: ChatRoom = {
+            id: 'staff',
+            name: 'Salle des Profs',
+            type: ChatRoomType.GROUP,
+            communityId: 'GENERAL',
+            memberIds: users.filter(u => u.role !== UserRole.STUDENT).map(u => u.id),
+            adminIds: users.filter(u => u.role === UserRole.ADMIN).map(u => u.id),
+            createdAt: new Date().toISOString()
+        };
+
+        const allInitialRooms = [...poleGeneralRooms, ...classRooms, generalRoom, staffRoom];
+        const visibleRooms = allInitialRooms.filter(r => 
+            currentUser.role === UserRole.ADMIN || 
+            r.memberIds.includes(currentUser.id) || 
+            r.adminIds.includes(currentUser.id)
+        );
+
+        setRooms(visibleRooms);
+        if (visibleRooms.length > 0) setActiveRoomId(visibleRooms[0].id);
+
+        setMessages([
+            { id: '1', roomId: 'general', senderId: '1', senderName: 'Admin Insan', content: 'Bienvenue sur la messagerie.', timestamp: new Date().toISOString() }
+        ]);
+    };
+
+    // --- MEMBER SYNC ---
+    useEffect(() => {
+        if (isLoading) return;
+        
+        setRooms(prevRooms => {
+            let changed = false;
+            const newRooms = prevRooms.map(room => {
+                if (room.type === ChatRoomType.CLASS && room.courseId) {
+                    const course = courses.find(c => c.id === room.courseId);
+                    if (course) {
+                        const professorIds = course.professorIds || [];
+                        const students = users.filter(u => u.role === UserRole.STUDENT && u.classId === course.id).map(u => u.id);
+                        const poleManagers = users.filter(u => u.managedPoleIds?.includes(course.pole)).map(u => u.id);
+                        const newMemberIds = Array.from(new Set([...professorIds, ...students, ...poleManagers]));
+                        if (room.memberIds.length !== newMemberIds.length || !room.memberIds.every(id => newMemberIds.includes(id))) {
+                            changed = true;
+                            return { ...room, memberIds: newMemberIds };
+                        }
+                    }
+                }
+                
+                if (room.id.startsWith('pole-general-')) {
+                    const poleId = room.id.replace('pole-general-', '');
+                    const pole = poles.find(p => p.id === poleId);
+                    if (pole) {
+                        const poleManagers = users.filter(u => u.managedPoleIds?.includes(pole.id)).map(u => u.id);
+                        const admins = users.filter(u => u.role === UserRole.ADMIN).map(u => u.id);
+                        const students = users.filter(u => u.role === UserRole.STUDENT && courses.some(c => c.pole === pole.id && u.classId === c.id)).map(u => u.id);
+                        const newMemberIds = Array.from(new Set([...admins, ...poleManagers, ...students]));
+                        const newAdminIds = Array.from(new Set([...admins, ...poleManagers]));
+                        
+                        const membersChanged = room.memberIds.length !== newMemberIds.length || !room.memberIds.every(id => newMemberIds.includes(id));
+                        const adminsChanged = room.adminIds.length !== newAdminIds.length || !room.adminIds.every(id => newAdminIds.includes(id));
+
+                        if (membersChanged || adminsChanged) {
+                            changed = true;
+                            return { ...room, memberIds: newMemberIds, adminIds: newAdminIds };
+                        }
+                    }
+                }
+                return room;
+            });
+            return changed ? newRooms : prevRooms;
+        });
+    }, [courses, users, poles, isLoading]);
 
     // --- HELPERS ---
     const activeRoom = useMemo(() => rooms.find(r => r.id === activeRoomId), [rooms, activeRoomId]);
@@ -185,8 +315,17 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
     // --- ACTIONS: MESSAGING ---
     const handleSendMessage = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        if ((!inputText.trim() && !selectedImage) || !activeRoomId) return;
+        if ((!inputText.trim() && !selectedImage) || !activeRoomId || !activeRoom) return;
         
+        // Check permissions
+        const isAdminOfRoom = activeRoom.adminIds.includes(currentUser.id) || currentUser.role === UserRole.ADMIN;
+        const canSend = isAdminOfRoom || (activeRoom.settings?.canMembersSendMessages !== false);
+
+        if (!canSend) {
+            alert("Seuls les administrateurs peuvent envoyer des messages dans ce groupe.");
+            return;
+        }
+
         const newMsg: ChatMessage = {
             id: Date.now().toString(),
             roomId: activeRoomId,
@@ -201,6 +340,21 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
         setMessages(prev => [...prev, newMsg]);
         setInputText('');
         setSelectedImage(null);
+
+        // Notify other members of the room
+        if (activeRoom) {
+            activeRoom.memberIds.forEach(memberId => {
+                if (memberId !== currentUser.id) {
+                    onAddNotification({
+                        userId: memberId,
+                        title: `Nouveau message dans ${activeRoom.name}`,
+                        message: `${currentUser.name}: ${inputText.substring(0, 50)}${inputText.length > 50 ? '...' : ''}`,
+                        type: 'info',
+                        metadata: { type: 'chat', roomId: activeRoom.id }
+                    });
+                }
+            });
+        }
     };
 
     const handleDeleteMessage = (msgId: string) => {
@@ -245,25 +399,71 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
         }
     };
 
-    const handleRemoveMember = (e: React.MouseEvent, userId: string) => {
-        e.stopPropagation(); 
-        if (!activeRoom || !canManageRoom(activeRoom)) return;
-        if (window.confirm("Retirer cet utilisateur du groupe ?")) {
-            setRooms(prev => prev.map(r => r.id === activeRoom.id ? { ...r, memberIds: r.memberIds.filter(id => id !== userId) } : r));
-        }
+    const handleRemoveMember = (e?: React.MouseEvent, userId?: string) => {
+        if (e && e.stopPropagation) e.stopPropagation(); 
+        if (!activeRoom || !canManageRoom(activeRoom) || !userId) return;
+        
+        setRooms(prev => prev.map(r => 
+            r.id === activeRoom.id 
+                ? { 
+                    ...r, 
+                    memberIds: r.memberIds.filter(id => id !== userId), 
+                    adminIds: r.adminIds.filter(id => id !== userId) 
+                } 
+                : r
+        ));
     };
 
     const handleAddMemberToRoom = () => {
-        if (!activeRoom || !memberToAdd || !canManageRoom(activeRoom)) return;
+        if (!activeRoom || !memberToAdd) return;
+        
+        const isAdminOfRoom = activeRoom.adminIds.includes(currentUser.id) || currentUser.role === UserRole.ADMIN;
+        const canAdd = isAdminOfRoom || (activeRoom.settings?.canMembersAddOthers);
+
+        if (!canAdd) {
+            alert("Seuls les administrateurs peuvent ajouter des membres.");
+            return;
+        }
+
         if (activeRoom.memberIds.includes(memberToAdd)) { alert("Déjà membre."); return; }
         setRooms(prev => prev.map(r => r.id === activeRoom.id ? { ...r, memberIds: [...r.memberIds, memberToAdd] } : r));
         setMemberToAdd('');
     };
 
+    const handleToggleAdmin = (userId: string) => {
+        if (!activeRoom || !canManageRoom(activeRoom)) return;
+        
+        setRooms(prev => prev.map(r => {
+            if (r.id !== activeRoom.id) return r;
+            const newAdminIds = r.adminIds.includes(userId)
+                ? r.adminIds.filter(id => id !== userId)
+                : [...r.adminIds, userId];
+            return { ...r, adminIds: newAdminIds };
+        }));
+    };
+
+    const handleUpdateSettings = (settings: Partial<ChatRoom['settings']>) => {
+        if (!activeRoom || !canManageRoom(activeRoom)) return;
+        setRooms(prev => prev.map(r => r.id === activeRoom.id ? { ...r, settings: { ...r.settings, ...settings } as any } : r));
+    };
+
     const handleCreate = () => {
+        if (currentUser.role === UserRole.STUDENT) {
+            alert("Les élèves ne peuvent pas créer de groupes de discussion.");
+            return;
+        }
         if (!newItemName.trim()) return;
 
+        const targetCommunityId = selectedCommunityId;
+        
+        // App Admin check
+        const isAppAdmin = currentUser.role === UserRole.ADMIN;
+        
         if (createMode === 'COMMUNITY') {
+            if (!isAppAdmin) {
+                alert("Seuls les administrateurs de l'application peuvent créer des communautés.");
+                return;
+            }
             const newCommId = `comm-${Date.now()}`;
             setCommunities(prev => [...prev, { id: newCommId, name: newItemName, isSystem: false }]);
             setExpandedSections(prev => ({ ...prev, [newCommId]: true }));
@@ -274,20 +474,48 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                 communityId: newCommId,
                 memberIds: users.map(u => u.id),
                 adminIds: [currentUser.id],
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                settings: {
+                    canMembersAddOthers: false,
+                    canMembersSendMessages: true,
+                    canMembersCreateGroups: false
+                }
             };
             setRooms(prev => [defaultRoom, ...prev]);
             setActiveRoomId(defaultRoom.id);
         } else {
-            const targetCommunityId = selectedCommunityId || 'GENERAL';
+            // Check if user has permission to create rooms in this community
+            let isCreationAllowed = isAppAdmin;
+            
+            if (targetCommunityId) {
+                const communityRooms = rooms.filter(r => r.communityId === targetCommunityId);
+                const isGroupAdmin = communityRooms.some(r => r.adminIds.includes(currentUser.id));
+                const isCreationAllowedBySettings = communityRooms.some(r => r.settings?.canMembersCreateGroups);
+                if (isGroupAdmin || isCreationAllowedBySettings) isCreationAllowed = true;
+            } else {
+                // For independent groups, allow anyone if it's the default? 
+                // Or maybe only admins/managers. Let's allow everyone to create independent groups by default for now
+                isCreationAllowed = true;
+            }
+            
+            if (!isCreationAllowed) {
+                alert("Vous n'avez pas la permission de créer des groupes ici.");
+                return;
+            }
+
             const newRoom: ChatRoom = {
                 id: `group-${Date.now()}`,
                 name: newItemName,
                 type: ChatRoomType.GROUP,
-                communityId: targetCommunityId,
+                communityId: targetCommunityId || undefined,
                 memberIds: [...selectedMemberIds, currentUser.id],
                 adminIds: [currentUser.id],
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                settings: {
+                    canMembersAddOthers: true,
+                    canMembersSendMessages: true,
+                    canMembersCreateGroups: true
+                }
             };
             setRooms(prev => [newRoom, ...prev]);
             setActiveRoomId(newRoom.id);
@@ -355,9 +583,11 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="font-black text-xl text-slate-800 dark:text-white">Discussions</h2>
-                        <button onClick={() => { setIsCreateModalOpen(true); setCreateMode('GROUP'); }} className="p-2 bg-insan-blue text-white rounded-xl hover:bg-blue-900 transition-colors shadow-lg shadow-blue-500/20">
-                            <Plus size={20}/>
-                        </button>
+                        {currentUser.role !== UserRole.STUDENT && (
+                            <button onClick={() => { setIsCreateModalOpen(true); setCreateMode('GROUP'); }} className="p-2 bg-insan-blue text-white rounded-xl hover:bg-blue-900 transition-colors shadow-lg shadow-blue-500/20">
+                                <Plus size={20}/>
+                            </button>
+                        )}
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
@@ -369,7 +599,11 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                     {communities.map(comm => {
                         const commRooms = rooms.filter(r => r.communityId === comm.id && r.name.toLowerCase().includes(searchTerm.toLowerCase()));
                         const isExpanded = expandedSections[comm.id];
+                        
+                        // Hide communities with no rooms for non-admins
+                        if (commRooms.length === 0 && currentUser.role !== UserRole.ADMIN) return null;
                         if (commRooms.length === 0 && searchTerm) return null;
+                        
                         return (
                             <div key={comm.id} className="mb-2 group/comm">
                                 <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
@@ -394,12 +628,45 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                             </div>
                         );
                     })}
+
+                    {/* Independent Rooms */}
+                    {(() => {
+                        const independentRooms = rooms.filter(r => !r.communityId && r.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                        if (independentRooms.length === 0) return null;
+                        const isExpanded = expandedSections['INDEPENDENT'] !== false; // Default expanded
+
+                        return (
+                            <div className="mb-2 group/comm">
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
+                                    <button onClick={() => setExpandedSections(prev => ({ ...prev, INDEPENDENT: !prev.INDEPENDENT }))} className="flex-1 flex items-center justify-between text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                        <span className="flex items-center gap-2"><Folder size={12}/>Groupes Indépendants</span>
+                                        {isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                                    </button>
+                                </div>
+                                {isExpanded && (
+                                    <div className="space-y-1 mt-1 pl-2 border-l-2 border-slate-100 dark:border-slate-800 ml-3">
+                                        {independentRooms.map(room => (
+                                            <button key={room.id} onClick={() => { setActiveRoomId(room.id); setShowRoomInfo(false); }} className={`w-full text-left p-2 rounded-lg flex items-center gap-3 transition-all ${activeRoomId === room.id ? 'bg-white dark:bg-slate-900 shadow-md border border-slate-100 dark:border-slate-800' : 'hover:bg-slate-100 dark:hover:bg-slate-800/50'}`}>
+                                                <div className={`w-2 h-2 rounded-full shrink-0 bg-insan-blue`}></div>
+                                                <p className={`text-sm font-bold truncate ${activeRoomId === room.id ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{room.name}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
             {/* MAIN CHAT AREA */}
             <div className="flex-1 flex flex-col bg-slate-50/50 dark:bg-slate-900 relative">
-                {activeRoom ? (
+                {isLoading ? (
+                    <div className="flex-1 flex flex-col items-center justify-center space-y-4">
+                        <div className="w-12 h-12 border-4 border-insan-blue border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-slate-500 font-bold">Chargement des discussions...</p>
+                    </div>
+                ) : activeRoom ? (
                     <>
                         <div className="h-16 px-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
                             <div className="flex items-center gap-3">
@@ -412,6 +679,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                             <div className="flex items-center gap-1">
                                 {canManageRoom(activeRoom) && <button onClick={handleDeleteRoom} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={20}/></button>}
                                 <button onClick={() => setShowRoomInfo(!showRoomInfo)} className={`p-2 rounded-lg transition-colors ${showRoomInfo ? 'bg-slate-100 dark:bg-slate-800 text-insan-blue' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><MoreVertical size={20}/></button>
+                                {isSaving && <div className="ml-2 w-2 h-2 rounded-full bg-insan-blue animate-pulse" title="Sauvegarde en cours..."></div>}
                             </div>
                         </div>
 
@@ -482,14 +750,88 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                        {canManageRoom(activeRoom) && (
+                            <div className="space-y-4 pt-2">
+                                <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Send size={12}/> Paramètres</h4>
+                                <div className="space-y-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Ajout de membres libre</span>
+                                        <button 
+                                            onClick={() => handleUpdateSettings({ canMembersAddOthers: !activeRoom.settings?.canMembersAddOthers })}
+                                            className={`w-10 h-5 rounded-full transition-colors relative ${activeRoom.settings?.canMembersAddOthers ? 'bg-insan-blue' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                        >
+                                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${activeRoom.settings?.canMembersAddOthers ? 'left-6' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Messages autorisés</span>
+                                        <button 
+                                            onClick={() => handleUpdateSettings({ canMembersSendMessages: !activeRoom.settings?.canMembersSendMessages })}
+                                            className={`w-10 h-5 rounded-full transition-colors relative ${activeRoom.settings?.canMembersSendMessages !== false ? 'bg-insan-blue' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                        >
+                                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${activeRoom.settings?.canMembersSendMessages !== false ? 'left-6' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Création de groupes libre</span>
+                                        <button 
+                                            onClick={() => handleUpdateSettings({ canMembersCreateGroups: !activeRoom.settings?.canMembersCreateGroups })}
+                                            className={`w-10 h-5 rounded-full transition-colors relative ${activeRoom.settings?.canMembersCreateGroups ? 'bg-insan-blue' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                        >
+                                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${activeRoom.settings?.canMembersCreateGroups ? 'left-6' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div>
-                            <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Shield size={12}/> Admins</h4>
+                            <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Shield size={12}/> Admins du groupe</h4>
                             <div className="space-y-3">{activeRoom.adminIds.map(adminId => { const admin = users.find(u => u.id === adminId); return admin ? (
-                                <div key={adminId} onClick={() => setViewingMember(admin)} className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-lg transition-colors">
-                                    <img src={admin.avatar} className="w-8 h-8 rounded-full"/><div className="flex-1 min-w-0"><p className="text-xs font-bold text-slate-800 dark:text-white truncate">{admin.name}</p></div>
+                                <div key={adminId} className="flex items-center gap-3">
+                                    <div onClick={() => setViewingMember(admin)} className="flex-1 flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-lg transition-colors overflow-hidden">
+                                        <img src={admin.avatar} className="w-8 h-8 rounded-full shrink-0"/>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{admin.name}</p>
+                                        </div>
+                                    </div>
+                                    {canManageRoom(activeRoom) && admin.id !== currentUser.id && (
+                                        <button 
+                                            onClick={() => handleToggleAdmin(adminId)}
+                                            className="text-slate-300 hover:text-orange-500 transition-colors p-1"
+                                            title="Retirer les droits admin"
+                                        >
+                                            <Shield size={14}/>
+                                        </button>
+                                    )}
                                 </div>
                             ) : null; })}</div>
                         </div>
+
+                        {/* Add Admin Action for Group Admins */}
+                        {canManageRoom(activeRoom) && (
+                             <div>
+                                <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><UserPlus size={12}/> Nommer Admin</h4>
+                                <div className="space-y-2">
+                                    <select 
+                                        className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 outline-none dark:text-white"
+                                        onChange={(e) => {
+                                            if (e.target.value) {
+                                                handleToggleAdmin(e.target.value);
+                                                e.target.value = "";
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Choisir un membre...</option>
+                                        {activeRoom.memberIds.filter(id => !activeRoom.adminIds.includes(id)).map(id => {
+                                            const u = users.find(x => x.id === id);
+                                            return u ? <option key={id} value={id}>{u.name}</option> : null;
+                                        })}
+                                    </select>
+                                </div>
+                             </div>
+                        )}
+
                         {canManageRoom(activeRoom) && (
                             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
                                 <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Ajouter un participant</label>
@@ -529,9 +871,9 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                             {createMode === 'GROUP' && (
                                 <>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Communauté</label>
+                                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Communauté (Optionnel)</label>
                                         <select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 font-bold outline-none dark:text-white" value={selectedCommunityId} onChange={e => setSelectedCommunityId(e.target.value)}>
-                                            <option value="">Général</option>
+                                            <option value="">Aucune (Groupe Indépendant)</option>
                                             {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
                                     </div>
@@ -576,6 +918,80 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, courses, poles, attenda
                                 {viewingMember.email && <div className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 group cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><div className="p-2 bg-white dark:bg-slate-700 rounded-xl shadow-sm text-insan-blue dark:text-blue-400"><Mail size={18}/></div><div className="text-left overflow-hidden"><p className="text-[10px] font-bold text-slate-400 uppercase">Email</p><p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{viewingMember.email}</p></div></div>}
                                 {viewingMember.phone && <div className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 group cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><div className="p-2 bg-white dark:bg-slate-700 rounded-xl shadow-sm text-green-500 dark:text-green-400"><Phone size={18}/></div><div className="text-left"><p className="text-[10px] font-bold text-slate-400 uppercase">Téléphone</p><p className="text-sm font-bold text-slate-700 dark:text-slate-200">{viewingMember.phone}</p></div></div>}
                             </div>
+                            
+                            {/* App Admin Specific Actions */}
+                            {currentUser.role === UserRole.ADMIN && (
+                                <div className="w-full mt-6 space-y-2">
+                                    <Button 
+                                        variant="secondary"
+                                        className="w-full border-2 border-insan-blue text-insan-blue"
+                                        onClick={() => {
+                                            const isStudent = viewingMember.role === UserRole.STUDENT;
+                                            if (isStudent) {
+                                                // Robust dossier search
+                                                const memberEmail = viewingMember.email?.toLowerCase().trim();
+                                                const memberName = viewingMember.name?.toLowerCase().trim();
+
+                                                const dossier = dossiers.find(d => {
+                                                    const dossierEmail = d.email?.toLowerCase().trim();
+                                                    const dossierName = `${d.firstName} ${d.lastName}`.toLowerCase().trim();
+                                                    
+                                                    const studentMatch = d.students.some(s => {
+                                                        const sEmail = s.email?.toLowerCase().trim();
+                                                        const sFullName = `${s.firstName} ${s.lastName}`.toLowerCase().trim();
+                                                        return (memberEmail && sEmail === memberEmail) || (memberName && sFullName === memberName);
+                                                    });
+
+                                                    return (memberEmail && dossierEmail === memberEmail) || (memberName && dossierName === memberName) || studentMatch;
+                                                });
+
+                                                if (dossier) {
+                                                    onNavigate('inscriptions', dossier.id);
+                                                } else {
+                                                    // Fallback to general inscriptions view if no matching dossier found
+                                                    onNavigate('inscriptions');
+                                                    alert("Dossier d'inscription introuvable pour cet élève.");
+                                                }
+                                            } else {
+                                                onNavigate('employees');
+                                            }
+                                            setViewingMember(null);
+                                        }}
+                                        icon={<FileText size={18} />}
+                                    >
+                                        Voir le Dossier
+                                    </Button>
+                                    
+                                    {activeRoom && activeRoom.adminIds.includes(viewingMember.id) && canManageRoom(activeRoom) && (
+                                         <Button 
+                                            variant="secondary"
+                                            className="w-full border-2 border-orange-500 text-orange-500 hover:bg-orange-50"
+                                            onClick={() => {
+                                                handleToggleAdmin(viewingMember.id);
+                                                setViewingMember(null);
+                                            }}
+                                            icon={<Shield size={18} />}
+                                        >
+                                            Retirer les droits Admin
+                                        </Button>
+                                    )}
+
+                                    {activeRoom && activeRoom.memberIds.includes(viewingMember.id) && (
+                                        <Button 
+                                            variant="danger"
+                                            className="w-full border-2"
+                                            onClick={() => {
+                                                handleRemoveMember(undefined, viewingMember.id);
+                                                setViewingMember(null);
+                                            }}
+                                            icon={<UserX size={18} />}
+                                        >
+                                            Exclure du groupe
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+
                             <Button className="w-full mt-8 py-4" onClick={() => setViewingMember(null)}>Fermer</Button>
                         </div>
                     </div>

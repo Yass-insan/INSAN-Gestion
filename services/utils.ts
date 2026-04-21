@@ -1,5 +1,5 @@
 
-import { User, AttendanceRecord, AttendanceStatus, UserRole } from '../types';
+import { User, AttendanceRecord, AttendanceStatus, UserRole, RegistrationDossier, CourseFormula, RegistrationStatus } from '../types';
 
 // Institut Insan Coordinates
 // 45.73573062211056, 4.841091638787199
@@ -51,6 +51,8 @@ export interface ClassStats {
     avgPresence: number;
     avgLate: number;
     avgAbsence: number;
+    physicalOccupancy: number;
+    remoteCount: number;
 }
 
 export const getStudentStats = (studentId: string, courseId: string, attendance: AttendanceRecord[]): StudentStats => {
@@ -69,12 +71,29 @@ export const getStudentStats = (studentId: string, courseId: string, attendance:
     return { present, late, absent, total, rate };
 };
 
-export const getClassStats = (courseId: string, allUsers: User[], allAttendance: AttendanceRecord[]): ClassStats => {
+export const getClassStats = (courseId: string, allUsers: User[], allAttendance: AttendanceRecord[], allDossiers: RegistrationDossier[] = []): ClassStats => {
     const students = allUsers.filter(u => u.role === UserRole.STUDENT && u.classId === courseId);
     const totalStudents = students.length;
 
+    // Calculate physical occupancy vs remote
+    let physicalOccupancy = 0;
+    let remoteCount = 0;
+
+    allDossiers.forEach(d => {
+        if (d.status === RegistrationStatus.CANCELLED) return;
+        d.enrollments.forEach(e => {
+            if (e.courseId === courseId && e.status !== RegistrationStatus.CANCELLED) {
+                if (e.formula === CourseFormula.REMOTE) {
+                    remoteCount++;
+                } else {
+                    physicalOccupancy++;
+                }
+            }
+        });
+    });
+
     if (totalStudents === 0) {
-        return { totalStudents: 0, avgPresence: 0, avgLate: 0, avgAbsence: 0 };
+        return { totalStudents: 0, avgPresence: 0, avgLate: 0, avgAbsence: 0, physicalOccupancy, remoteCount };
     }
 
     let totalPresencePct = 0;
@@ -86,7 +105,7 @@ export const getClassStats = (courseId: string, allUsers: User[], allAttendance:
     const totalRecords = classRecords.length;
 
     if (totalRecords === 0) {
-         return { totalStudents, avgPresence: 0, avgLate: 0, avgAbsence: 0 };
+         return { totalStudents, avgPresence: 0, avgLate: 0, avgAbsence: 0, physicalOccupancy, remoteCount };
     }
 
     const presentCount = classRecords.filter(r => r.status === AttendanceStatus.PRESENT || r.status === AttendanceStatus.JUSTIFIED).length;
@@ -101,6 +120,8 @@ export const getClassStats = (courseId: string, allUsers: User[], allAttendance:
         totalStudents,
         avgPresence: totalPresencePct,
         avgLate: totalLatePct,
-        avgAbsence: totalAbsencePct
+        avgAbsence: totalAbsencePct,
+        physicalOccupancy,
+        remoteCount
     };
 };

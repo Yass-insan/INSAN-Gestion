@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
-import { UserRole } from '../types';
+import { UserRole, InstituteSettings } from '../types';
 import { ChevronRight, ShieldCheck, GraduationCap } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface LoginProps {
   onLogin: (email: string) => void;
+  settings: InstituteSettings;
+  isDarkMode?: boolean;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, settings, isDarkMode }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'login' | 'demo'>('login');
@@ -44,7 +46,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(#262262 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
             
             <div className="relative z-10">
-                <Logo className="h-20 mb-8" />
+                <Logo className="h-20 mb-8" logoUrl={settings.logo} logoUrlDark={settings.logoDark} isDarkMode={isDarkMode} />
                 
                 <h1 className="text-3xl font-bold text-insan-blue dark:text-blue-400 mb-2 tracking-tight">Portail Numérique</h1>
                 <p className="text-gray-500 dark:text-slate-400 text-lg leading-relaxed">

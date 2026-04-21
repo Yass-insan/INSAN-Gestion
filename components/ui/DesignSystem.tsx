@@ -141,6 +141,6 @@ export const PageHeader = ({ title, subtitle, action }: { title: string, subtitl
             <h2 className="text-4xl md:text-5xl font-black text-slate-800 dark:text-white tracking-tighter leading-none mb-4">{title}</h2>
             {subtitle && <p className="text-lg text-slate-400 dark:text-slate-500 font-medium leading-relaxed">{subtitle}</p>}
         </div>
-        {action && <div className="flex shrink-0 gap-3">{action}</div>}
+        {action && <div className="flex flex-wrap shrink-0 gap-3">{action}</div>}
     </div>
 );

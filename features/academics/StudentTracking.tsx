@@ -1,6 +1,22 @@
 import React, { useState, useMemo } from 'react';
-import { User, Course, AttendanceRecord, UserRole, FollowUpRecord, FollowUpStatus, AttendanceStatus, FollowUpAction, RegistrationDossier, Homework } from '../../types';
+import { 
+    User, 
+    Course, 
+    AttendanceRecord, 
+    UserRole, 
+    FollowUpRecord, 
+    FollowUpStatus, 
+    AttendanceStatus, 
+    FollowUpAction, 
+    RegistrationDossier, 
+    Homework,
+    StudentFormTemplate,
+    StudentFormRequest,
+    FormFieldType,
+    Pole
+} from '../../types';
 import { Card, PageHeader, Badge, Button } from '../../components/ui/DesignSystem';
+import DocumentManager from './DocumentManager';
 import { getStudentStats, getClassStats } from '../../services/utils';
 import { 
     Search, 
@@ -32,7 +48,11 @@ import {
     Inbox,
     Archive,
     Save,
-    RotateCcw
+    RotateCcw,
+    ClipboardList,
+    ClipboardCheck,
+    Check,
+    Eye
 } from 'lucide-react';
 
 // --- HELPERS ---
@@ -54,7 +74,7 @@ const getConsecutiveAbsences = (studentId: string, allAttendance: AttendanceReco
 
 // --- SUB-COMPONENTS ---
 
-const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, courseName, onUpdate, onOpenProfile }: any) => {
+const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, courseName, onUpdate, onOpenProfile, currentUser }: any) => {
     const [comment, setComment] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<FollowUpStatus>(followUp.status);
 
@@ -69,7 +89,7 @@ const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, 
             date: new Date().toISOString(), 
             status: selectedStatus, 
             comment: comment || (selectedStatus === FollowUpStatus.NO_ANSWER ? "Tentative d'appel infructueuse" : "Échange validé avec succès"), 
-            performedBy: 'Staff' 
+            performedBy: currentUser?.name || 'Staff' 
         };
         
         const updatedRecord: FollowUpRecord = { 
@@ -118,9 +138,14 @@ const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, 
                         </p>
                         <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">
                             {absenceDetails.map((abs: any) => (
-                                <div key={abs.id} className="flex justify-between items-center text-[10px] p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800">
-                                    <span className="font-bold text-slate-500">{new Date(abs.date).toLocaleDateString()}</span>
-                                    <Badge color={abs.status === 'JUSTIFIED' ? 'blue' : 'red'}>{abs.status === 'JUSTIFIED' ? 'Justifié' : 'Absent'}</Badge>
+                                <div key={abs.id} className="flex flex-col gap-1 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                    <div className="flex justify-between items-center text-[10px]">
+                                        <span className="font-bold text-slate-500">{new Date(abs.date).toLocaleDateString()}</span>
+                                        <Badge color={abs.status === 'JUSTIFIED' ? 'blue' : 'red'}>{abs.status === 'JUSTIFIED' ? 'Justifié' : 'Absent'}</Badge>
+                                    </div>
+                                    {abs.recordedBy && (
+                                        <p className="text-[8px] text-slate-400 font-bold italic">Saisi par: {abs.recordedBy}</p>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -167,7 +192,7 @@ const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, 
                                     <textarea 
                                         className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-xs font-bold outline-none focus:ring-2 focus:ring-insan-blue/20 min-h-[80px] dark:text-white" 
                                         placeholder="Notez ici les raisons de l'absence ou le motif du non-décrochage..." 
-                                        value={comment} 
+                                        value={comment || ''} 
                                         onChange={(e) => setComment(e.target.value)} 
                                     />
                                 </div>
@@ -211,8 +236,9 @@ const FollowUpItem = ({ student, consecutiveAbsences, absenceDetails, followUp, 
     );
 };
 
-const StudentDetailPanel = ({ student, stats, dossiers, isModal = false, onNavigateToDossier, courses }: { student: User, stats: any, dossiers: RegistrationDossier[], isModal?: boolean, onNavigateToDossier?: (id: string) => void, courses: Course[] }) => {
-    
+const StudentDetailPanel = ({ student, stats, dossiers, isModal = false, onNavigateToDossier, courses, formTemplates }: { student: User, stats: any, dossiers: RegistrationDossier[], isModal?: boolean, onNavigateToDossier?: (id: string) => void, courses: Course[], formTemplates: StudentFormTemplate[] }) => {
+    const [selectedFormForView, setSelectedFormForView] = useState<any>(null);
+
     const handleViewDossier = () => {
         if (!onNavigateToDossier) return;
         const dossier = dossiers.find(d => d.students.some(s => s.id === student.id));
@@ -227,62 +253,158 @@ const StudentDetailPanel = ({ student, stats, dossiers, isModal = false, onNavig
         dossiers.some(d => d.students.some(s => s.id === student.id) && d.enrollments.some(e => e.studentId === student.id && e.courseId === c.id))
     );
 
+    const studentDossier = dossiers.find(d => d.students.some(s => s.id === student.id));
+
     return (
         <Card className={`p-8 animate-fade-in border-insan-blue/20 bg-gradient-to-br from-blue-50/50 to-white dark:from-slate-800 dark:to-slate-900 shadow-inner border-l-4 border-l-insan-blue rounded-[2.5rem] ${isModal ? 'my-0 border-0 shadow-2xl' : 'my-2'}`}>
-            <div className="flex flex-col md:flex-row gap-8 items-start">
-                <div className="relative shrink-0 mx-auto md:mx-0">
-                    <img src={student.avatar} className="w-32 h-32 rounded-[2.5rem] object-cover border-4 border-white dark:border-slate-700 shadow-xl" alt={student.name}/>
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap scale-90">
-                        <Badge color={stats.rate >= 80 ? 'green' : 'red'}>{stats.rate}% Assiduité</Badge>
-                    </div>
-                </div>
-                <div className="flex-1 text-center md:text-left space-y-5">
-                    <div>
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{student.name}</h3>
-                        <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-2">
-                             <Badge color="gray" icon={<UserCircle size={12}/>}>ID: {student.id.substring(student.id.length - 6).toUpperCase()}</Badge>
-                             <Badge color="blue" icon={<BookOpen size={12}/>}>{studentCourses.length} Cours actifs</Badge>
-                        </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-                            <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Présences</p>
-                            <p className="text-lg font-black text-green-500">{stats.present}</p>
-                        </div>
-                        <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-                            <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Retards</p>
-                            <p className="text-lg font-black text-orange-500">{stats.late}</p>
-                        </div>
-                        <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-                            <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Absences</p>
-                            <p className="text-lg font-black text-red-500">{stats.absent}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                <div className="flex flex-col items-center gap-6">
+                    <div className="relative shrink-0">
+                        <img src={student.avatar} className="w-32 h-32 rounded-[2.5rem] object-cover border-4 border-white dark:border-slate-700 shadow-xl" alt={student.name}/>
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap scale-90">
+                            <Badge color={stats.rate >= 80 ? 'green' : 'red'}>{stats.rate}% Assiduité</Badge>
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Inscrit aux cours :</p>
-                        <div className="flex flex-wrap gap-2">
-                            {studentCourses.map(c => (
-                                <span key={c.id} className="text-[10px] font-bold px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{c.name}</span>
-                            ))}
-                            {studentCourses.length === 0 && <p className="text-xs text-slate-400 italic">Aucun cours trouvé.</p>}
+                    <div className="w-full space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex gap-2 justify-center">
+                            <button className="flex-1 p-3 bg-white dark:bg-slate-900 text-slate-400 hover:text-insan-blue rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all flex justify-center"><Mail size={16}/></button>
+                            <button className="flex-1 p-3 bg-white dark:bg-slate-900 text-slate-400 hover:text-insan-blue rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all flex justify-center"><Phone size={16}/></button>
                         </div>
-                    </div>
-
-                    <div className="flex gap-2 justify-center md:justify-start pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <button className="p-3 bg-white dark:bg-slate-900 text-slate-400 hover:text-insan-blue rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all"><Mail size={16}/></button>
-                        <button className="p-3 bg-white dark:bg-slate-900 text-slate-400 hover:text-insan-blue rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all"><Phone size={16}/></button>
                         <Button 
                             variant="primary" 
-                            className="px-6 rounded-xl text-xs flex items-center gap-2"
+                            className="w-full rounded-xl text-xs flex items-center justify-center gap-2"
                             onClick={handleViewDossier}
                         >
-                            <FileText size={14}/> Dossier de scolarité
+                            <FileText size={14}/> Accès au Dossier
                         </Button>
                     </div>
                 </div>
+
+                <div className="md:col-span-2 lg:col-span-3 space-y-6">
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{student.name}</h3>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                <Badge color="gray" icon={<UserCircle size={12}/>}>ID: {student.id.substring(student.id.length - 6).toUpperCase()}</Badge>
+                                <Badge color="blue" icon={<BookOpen size={12}/>}>{studentCourses.length} Cours actifs</Badge>
+                                {studentDossier?.submittedForms && studentDossier.submittedForms.length > 0 && (
+                                    <Badge color="green" icon={<ClipboardCheck size={12}/>}>{studentDossier.submittedForms.length} Formulaires complétés</Badge>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 text-center min-w-[80px]">
+                                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Présences</p>
+                                <p className="text-lg font-black text-green-500">{stats.present}</p>
+                            </div>
+                            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 text-center min-w-[80px]">
+                                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Retards</p>
+                                <p className="text-lg font-black text-orange-500">{stats.late}</p>
+                            </div>
+                            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 text-center min-w-[80px]">
+                                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Absences</p>
+                                <p className="text-lg font-black text-red-500">{stats.absent}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cours & Formations</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {studentCourses.map(c => (
+                                    <span key={c.id} className="text-xs font-bold px-4 py-2 bg-white dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700 shadow-sm">{c.name}</span>
+                                ))}
+                                {studentCourses.length === 0 && <p className="text-xs text-slate-400 italic">Aucun cours trouvé.</p>}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Formulaires & Documents</h4>
+                            <div className="space-y-2">
+                                {studentDossier?.submittedForms?.map((form, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm group">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-green-50 dark:bg-green-900/20 text-green-500 rounded-lg">
+                                                <FileText size={14}/>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Formulaire #{idx + 1}</p>
+                                                <p className="text-[9px] text-slate-400 font-bold">Le {new Date(form.submittedAt!).toLocaleDateString()}</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            className="text-insan-blue opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => setSelectedFormForView(form)}
+                                        >
+                                            <ArrowRight size={16}/>
+                                        </button>
+                                    </div>
+                                ))}
+                                {(!studentDossier?.submittedForms || studentDossier.submittedForms.length === 0) && (
+                                    <div className="py-4 px-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-700 text-center">
+                                        <p className="text-[10px] text-slate-400 font-bold italic">Aucun document complété.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* MODALE DE VUE DU DOCUMENT (Depuis le profil élève) */}
+            {selectedFormForView && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-fade-in" onClick={() => setSelectedFormForView(null)}>
+                    <Card className="w-full max-w-2xl p-0 rounded-[2.5rem] relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-green-500 text-white rounded-2xl shadow-lg shadow-green-900/20">
+                                    <ClipboardCheck size={24}/>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Détails du Document</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{student.name} • {new Date(selectedFormForView.submittedAt).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setSelectedFormForView(null)} className="p-2 text-slate-400 hover:text-slate-600 transition-colors"><X size={24}/></button>
+                        </div>
+
+                        <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                            <div className="space-y-6">
+                                {(() => {
+                                    const tpl = formTemplates.find(t => t.id === selectedFormForView.templateId);
+                                    if (!tpl) return <p className="text-slate-400 italic">Modèle de formulaire introuvable (peut-être a-t-il été supprimé).</p>;
+                                    
+                                    return tpl.fields.map(field => (
+                                        <div key={field.id} className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                                                {field.label}
+                                            </label>
+                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+                                                {field.type === FormFieldType.CHECKBOX ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-4 h-4 rounded flex items-center justify-center ${selectedFormForView.submittedData?.[field.id] ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                                            {selectedFormForView.submittedData?.[field.id] && <Check size={10}/>}
+                                                        </div>
+                                                        <span>{selectedFormForView.submittedData?.[field.id] ? 'Accepté / Validé' : 'Non coché'}</span>
+                                                    </div>
+                                                ) : (
+                                                    selectedFormForView.submittedData?.[field.id] || <span className="text-slate-400 italic font-medium">Non renseigné</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                        </div>
+
+                        <div className="p-8 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                            <Button onClick={() => setSelectedFormForView(null)} className="px-8 rounded-xl font-black uppercase tracking-widest text-xs">Fermer</Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
         </Card>
     );
 };
@@ -292,6 +414,7 @@ const StudentDetailPanel = ({ student, stats, dossiers, isModal = false, onNavig
 interface StudentTrackingProps {
     users: User[];
     courses: Course[];
+    poles: Pole[];
     attendance: AttendanceRecord[];
     dossiers: RegistrationDossier[];
     followUpRecords?: FollowUpRecord[];
@@ -301,22 +424,68 @@ interface StudentTrackingProps {
     homework?: Homework[];
     currentUser?: User;
     onManageUsers?: (action: 'add' | 'update' | 'delete', updatedUser: User) => void;
+    
+    // Form management
+    formTemplates: StudentFormTemplate[];
+    formRequests: StudentFormRequest[];
+    onSaveTemplate: (tpl: StudentFormTemplate) => void;
+    onDeleteTemplate: (id: string) => void;
+    onSendRequests: (tplId: string, targetIds: string[]) => void;
+    onRemindRequests?: (requestId: string) => void;
+    onUpdateFormStatus: (id: string, status: 'PENDING' | 'COMPLETED', data?: any) => void;
 }
 
-const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, courses, dossiers, followUpRecords = [], onUpdateFollowUp = () => {}, onNavigateToStats = (_poleId: string, _classId: string) => {}, onNavigateToDossier }) => {
+const StudentTracking: React.FC<StudentTrackingProps> = ({ 
+    users, 
+    attendance, 
+    courses, 
+    poles,
+    dossiers, 
+    followUpRecords = [], 
+    onUpdateFollowUp = () => {}, 
+    onNavigateToStats = (_poleId: string, _classId: string) => {}, 
+    onNavigateToDossier, 
+    currentUser,
+    formTemplates,
+    formRequests,
+    onSaveTemplate,
+    onDeleteTemplate,
+    onSendRequests,
+    onRemindRequests,
+    onUpdateFormStatus
+}) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeTab, setActiveTab] = useState<'classes' | 'trombi' | 'followup'>('classes');
+    const [activeTab, setActiveTab] = useState<'classes' | 'trombi' | 'followup' | 'forms'>('classes');
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
     const [focusedStudentId, setFocusedStudentId] = useState<string | null>(null);
     
     // Triple Flux de Suivi
     const [followUpFilter, setFollowUpFilter] = useState<'TO_CONTACT' | 'NO_ANSWER' | 'ARCHIVED'>('TO_CONTACT');
 
+    // 0. Filtrage initial par rôle (Responsable de pôle)
+    const isResponsible = currentUser?.role === UserRole.RESPONSIBLE || currentUser?.secondaryRoles?.includes(UserRole.RESPONSIBLE);
+
+    const accessibleCourses = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return courses;
+        if (isResponsible) {
+            return courses.filter(c => currentUser.managedPoleIds?.includes(c.pole));
+        }
+        return courses;
+    }, [courses, currentUser, isResponsible]);
+
+    const accessibleUsers = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return users;
+        if (isResponsible) {
+            return users.filter(u => u.role === UserRole.STUDENT && accessibleCourses.some(c => c.id === u.classId));
+        }
+        return users;
+    }, [users, accessibleCourses, currentUser, isResponsible]);
+
     // 1. Calcul des alertes d'absentéisme (3+ absences consécutives)
     const allAlerts = useMemo(() => {
-        return users.filter(u => u.role === UserRole.STUDENT).map(student => {
+        return accessibleUsers.filter(u => u.role === UserRole.STUDENT).map(student => {
             const { count, absenceDetails } = getConsecutiveAbsences(student.id, attendance);
-            const course = courses.find(c => c.id === student.classId);
+            const course = accessibleCourses.find(c => c.id === student.classId);
             const courseId = student.classId || 'unknown';
             const existing = followUpRecords.find(f => f.studentId === student.id && f.courseId === courseId);
             
@@ -337,7 +506,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                 courseName: course?.name || 'Classe inconnue' 
             };
         }).filter(item => item.consecutiveAbsences >= 3);
-    }, [users, attendance, courses, followUpRecords]);
+    }, [accessibleUsers, attendance, accessibleCourses, followUpRecords]);
 
     // 2. Statistiques du workflow
     const stats = useMemo(() => {
@@ -351,13 +520,13 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
 
     // 3. Filtrage
     const filteredStudents = useMemo(() => {
-        return users.filter(u => u.role === UserRole.STUDENT).filter(u => {
+        return accessibleUsers.filter(u => u.role === UserRole.STUDENT).filter(u => {
             const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                 courses.find(c => c.id === u.classId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
+                                 accessibleCourses.find(c => c.id === u.classId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesClass = !selectedClassId || u.classId === selectedClassId;
             return matchesSearch && matchesClass;
         });
-    }, [users, searchTerm, courses, selectedClassId]);
+    }, [accessibleUsers, searchTerm, accessibleCourses, selectedClassId]);
 
     const filteredAlerts = useMemo(() => {
         return allAlerts.filter(i => {
@@ -392,7 +561,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
     };
 
     const selectedCourse = useMemo(() => courses.find(c => c.id === selectedClassId), [courses, selectedClassId]);
-    const classStats = useMemo(() => selectedClassId ? getClassStats(selectedClassId, users, attendance) : null, [selectedClassId, users, attendance]);
+    const classStats = useMemo(() => selectedClassId ? getClassStats(selectedClassId, users, attendance, dossiers) : null, [selectedClassId, users, attendance, dossiers]);
 
     return (
         <div className="space-y-8 animate-fade-in pb-20">
@@ -423,6 +592,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                             <button onClick={() => setActiveTab('classes')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'classes' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500'}`}><BookOpen size={14}/> Classes</button>
                             <button onClick={() => setActiveTab('trombi')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'trombi' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500'}`}><LayoutGrid size={14}/> Trombi</button>
                             <button onClick={() => setActiveTab('followup')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'followup' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500'}`}><AlertCircle size={14}/> Suivi Absences {stats.toContact > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 rounded-full animate-pulse">{stats.toContact}</span>}</button>
+                            <button onClick={() => setActiveTab('forms')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'forms' ? 'bg-insan-blue text-white shadow-md' : 'text-slate-500'}`}><ClipboardList size={14}/> Formulaires</button>
                         </div>
                     )
                 }
@@ -432,7 +602,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                 <Card className="p-4 shadow-sm border-0">
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-                        <input type="text" placeholder={activeTab === 'classes' ? "Rechercher une classe..." : activeTab === 'trombi' ? "Rechercher un élève..." : "Rechercher un dossier de suivi..."} className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-insan-blue/10 dark:text-white transition-all shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        <input type="text" placeholder={activeTab === 'classes' ? "Rechercher une classe..." : activeTab === 'trombi' ? "Rechercher un élève..." : "Rechercher un dossier de suivi..."} className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-insan-blue/10 dark:text-white transition-all shadow-inner" value={searchTerm || ''} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
                 </Card>
             )}
@@ -455,8 +625,9 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                             <p className="text-3xl font-black text-orange-600">{classStats?.avgLate}%</p>
                         </Card>
                         <Card className="p-5 border-l-4 border-green-500 bg-green-50/20 dark:bg-green-900/20 shadow-sm">
-                            <p className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Effectif</p>
-                            <p className="text-3xl font-black text-slate-800 dark:text-white">{classStats?.totalStudents} Élèves</p>
+                            <p className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Occupation Physique</p>
+                            <p className="text-3xl font-black text-slate-800 dark:text-white">{classStats?.physicalOccupancy} / {selectedCourse?.capacity || '∞'}</p>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1">+{classStats?.remoteCount} en distanciel</p>
                         </Card>
                     </div>
 
@@ -496,7 +667,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                     </div>
                                     {isFocused && (
                                         <div className="px-4 pb-2 animate-fade-in origin-top">
-                                            <StudentDetailPanel student={student} stats={sStats} dossiers={dossiers} onNavigateToDossier={onNavigateToDossier} courses={courses} />
+                                            <StudentDetailPanel student={student} stats={sStats} dossiers={dossiers} onNavigateToDossier={onNavigateToDossier} courses={accessibleCourses} formTemplates={formTemplates} />
                                         </div>
                                     )}
                                 </React.Fragment>
@@ -504,10 +675,25 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                         })}
                     </div>
                 </div>
+            ) : activeTab === 'forms' ? (
+                <DocumentManager 
+                    users={accessibleUsers} 
+                    courses={accessibleCourses} 
+                    poles={poles} 
+                    dossiers={dossiers}
+                    templates={formTemplates}
+                    requests={formRequests}
+                    onSaveTemplate={onSaveTemplate}
+                    onDeleteTemplate={onDeleteTemplate}
+                    onSendRequests={onSendRequests}
+                    onRemindStudent={onRemindRequests}
+                    onUpdateStatus={onUpdateFormStatus}
+                    currentUser={currentUser!}
+                />
             ) : activeTab === 'classes' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
-                    {courses.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(course => {
-                        const cStats = getClassStats(course.id, users, attendance);
+                    {accessibleCourses.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(course => {
+                        const cStats = getClassStats(course.id, accessibleUsers, attendance, dossiers);
                         return (
                             <Card key={course.id} className="p-0 overflow-hidden hover:shadow-2xl transition-all duration-300 group cursor-pointer border-2 border-transparent hover:border-insan-blue/10 flex flex-col" onClick={() => handleSelectClass(course.id)}>
                                 <div className="p-6 flex-1">
@@ -515,9 +701,14 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                         <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-insan-blue dark:text-blue-400 group-hover:bg-insan-blue group-hover:text-white transition-colors">
                                             <BookOpen size={24}/>
                                         </div>
-                                        <Badge color={cStats.avgPresence >= 80 ? 'green' : 'orange'}>
-                                            {cStats.avgPresence}% Présence
-                                        </Badge>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <Badge color={cStats.avgPresence >= 80 ? 'green' : 'orange'}>
+                                                {cStats.avgPresence}% Présence
+                                            </Badge>
+                                            <Badge color={(course.capacity && cStats.physicalOccupancy >= course.capacity) ? 'red' : 'blue'}>
+                                                {cStats.physicalOccupancy}/{course.capacity || '∞'} places
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <h3 className="text-xl font-black text-slate-800 dark:text-white mb-1 group-hover:text-insan-blue transition-colors">{course.name}</h3>
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">{course.pole}</p>
@@ -535,7 +726,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                             <p className="text-lg font-black text-orange-600">{cStats.avgLate}%</p>
                                         </div>
                                         <div className="p-3 bg-green-50/50 dark:bg-green-900/10 rounded-xl border border-green-100/20 dark:border-green-800/20">
-                                            <p className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Effectif</p>
+                                            <p className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Effectif Total</p>
                                             <p className="text-lg font-black text-slate-800 dark:text-white">{cStats.totalStudents}</p>
                                         </div>
                                     </div>
@@ -587,7 +778,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                     const student = users.find(u => u.id === focusedStudentId);
                                     if (!student) return null;
                                     const stats = getStudentStats(student.id, student.classId || '', attendance);
-                                    return <StudentDetailPanel student={student} stats={stats} dossiers={dossiers} isModal={true} onNavigateToDossier={onNavigateToDossier} courses={courses} />;
+                                    return <StudentDetailPanel student={student} stats={stats} dossiers={dossiers} isModal={true} onNavigateToDossier={onNavigateToDossier} courses={accessibleCourses} formTemplates={formTemplates} />;
                                 })()}
                             </div>
                         </div>
@@ -656,7 +847,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                 type="text" 
                                 placeholder="Rechercher un dossier..." 
                                 className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-insan-blue/10 dark:text-white"
-                                value={searchTerm}
+                                value={searchTerm || ''}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
@@ -679,6 +870,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                     {...item} 
                                     onUpdate={onUpdateFollowUp} 
                                     onOpenProfile={openQuickProfile}
+                                    currentUser={currentUser}
                                 />
                             ))
                         )}
@@ -693,7 +885,7 @@ const StudentTracking: React.FC<StudentTrackingProps> = ({ users, attendance, co
                                     const student = users.find(u => u.id === focusedStudentId);
                                     if (!student) return null;
                                     const stats = getStudentStats(student.id, student.classId || '', attendance);
-                                    return <StudentDetailPanel student={student} stats={stats} dossiers={dossiers} isModal={true} onNavigateToDossier={onNavigateToDossier} courses={courses} />;
+                                    return <StudentDetailPanel student={student} stats={stats} dossiers={dossiers} isModal={true} onNavigateToDossier={onNavigateToDossier} courses={accessibleCourses} formTemplates={formTemplates} />;
                                 })()}
                             </div>
                         </div>

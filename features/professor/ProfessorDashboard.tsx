@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Course, AttendanceRecord, UserRole, Homework, NewsItem, InstituteSettings, AttendanceStatus } from '../../types';
 import { Card, Button, Badge, PageHeader, useToast } from '../../components/ui/DesignSystem';
-import { Users, Clock, Check, X, ChevronRight, Save, UserCheck, AlertTriangle, BookOpen, Bell, Calendar, Plus, Trash2, FileText, AlertCircle } from 'lucide-react';
+import { Users, Clock, Check, X, ChevronRight, Save, UserCheck, AlertTriangle, BookOpen, Bell, Calendar, Plus, Trash2, FileText, AlertCircle, Paperclip, Image as ImageIcon, File as FileIcon } from 'lucide-react';
 
 interface ProfessorDashboardProps {
     user: User;
@@ -15,10 +15,12 @@ interface ProfessorDashboardProps {
     onAddNews: (news: NewsItem) => void;
     onAddAttendance: (record: AttendanceRecord) => void;
     onManageHomework: (action: 'add' | 'delete', homework: Homework) => void;
+    onReadMore?: (news: NewsItem) => void;
+    onViewPdf?: (url: string, title: string) => void;
 }
 
 const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ 
-    user, courses, attendance, users, onAddAttendance, news, homework, onManageHomework 
+    user, courses, attendance, users, onAddAttendance, news, homework, onManageHomework, onReadMore, onViewPdf 
 }) => {
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'homework' | 'planning'>('overview');
@@ -34,6 +36,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
     const [newHwDesc, setNewHwDesc] = useState('');
     const [newHwDate, setNewHwDate] = useState('');
     const [newHwCourseId, setNewHwCourseId] = useState('');
+    const [newHwAttachment, setNewHwAttachment] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
 
     const myCourses = courses.filter(c => c.professorIds.includes(user.id));
     const myHomework = homework.filter(h => h.assignedBy === user.name);
@@ -78,13 +81,28 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                 courseId: newHwCourseId,
                 title: newHwTitle,
                 description: newHwDesc,
-                dueDate: newHwDate,
-                assignedBy: user.name
+                dueDate: newHwDate || undefined,
+                assignedBy: user.name,
+                attachmentUrl: newHwAttachment?.url,
+                attachmentType: newHwAttachment?.type
             });
             setIsHomeworkModalOpen(false);
-            setNewHwTitle(''); setNewHwDesc(''); setNewHwDate(''); setNewHwCourseId('');
+            setNewHwTitle(''); setNewHwDesc(''); setNewHwDate(''); setNewHwCourseId(''); setNewHwAttachment(null);
             showToast("Devoir ajouté au cahier de textes.", "success");
         }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const url = event.target?.result as string;
+            const type = file.type.startsWith('image/') ? 'image' : 'pdf';
+            setNewHwAttachment({ url, type });
+        };
+        reader.readAsDataURL(file);
     };
 
     const markAllPresent = () => {
@@ -147,16 +165,20 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                             </div>
                             <div className="space-y-4">
                                  {news.slice(0, 5).map(n => (
-                                    <div key={n.id} className={`pb-4 border-b border-slate-50 dark:border-slate-800 last:border-0 last:pb-0 flex gap-4 items-start ${n.isUrgent ? 'animate-pulse-subtle' : ''}`}>
+                                    <div 
+                                        key={n.id} 
+                                        onClick={() => onReadMore?.(n)}
+                                        className={`pb-4 border-b border-slate-50 dark:border-slate-800 last:border-0 last:pb-0 flex gap-4 items-start cursor-pointer group ${n.isUrgent ? 'animate-pulse-subtle' : ''}`}
+                                    >
                                         {(n.coverUrl || n.mediaUrl) && (
-                                            <img src={n.coverUrl || n.mediaUrl} className="w-16 h-16 rounded-lg object-cover border border-slate-100 dark:border-slate-700 shadow-sm shrink-0" alt="" referrerPolicy="no-referrer" />
+                                            <img src={n.coverUrl || n.mediaUrl} className="w-16 h-16 rounded-lg object-cover border border-slate-100 dark:border-slate-700 shadow-sm shrink-0 group-hover:scale-105 transition-transform" alt="" referrerPolicy="no-referrer" />
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-center mb-1">
                                                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{n.date}</p>
                                                 {n.isUrgent && <Badge color="red" className="scale-75 origin-right">URGENT</Badge>}
                                             </div>
-                                            <h4 className={`font-bold text-sm truncate ${n.isUrgent ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{n.title}</h4>
+                                            <h4 className={`font-bold text-sm truncate group-hover:text-insan-blue transition-colors ${n.isUrgent ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{n.title}</h4>
                                             <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">{n.content}</p>
                                         </div>
                                     </div>
@@ -185,7 +207,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 w-full md:w-auto">
-                                <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className="flex-1 md:flex-none border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-200 shadow-sm outline-none" />
+                                <input type="date" value={attendanceDate || ''} onChange={e => setAttendanceDate(e.target.value)} className="flex-1 md:flex-none border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-200 shadow-sm outline-none" />
                                 <Button variant="secondary" onClick={markAllPresent} size="sm">Tous présents</Button>
                                 <Button onClick={submitAttendance} icon={<Save size={18}/>}>Enregistrer</Button>
                             </div>
@@ -310,10 +332,29 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                                         <button onClick={() => onManageHomework('delete', h)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
                                         <div className="flex justify-between items-start mb-3">
                                             <Badge color="blue">{courseName}</Badge>
-                                            <span className="text-[10px] font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded border border-red-100 dark:border-red-900/30">Échéance : {h.dueDate}</span>
+                                            {h.dueDate && (
+                                                <span className="text-[10px] font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded border border-red-100 dark:border-red-900/30">Échéance : {h.dueDate}</span>
+                                            )}
                                         </div>
                                         <h4 className="font-bold text-slate-800 dark:text-white text-lg mb-2">{h.title}</h4>
                                         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4">{h.description}</p>
+                                        
+                                        {h.attachmentUrl && (
+                                            <div className="mb-4">
+                                                {h.attachmentType === 'image' ? (
+                                                    <img src={h.attachmentUrl} className="w-full h-32 object-cover rounded-xl border border-slate-100 dark:border-slate-700" alt="Attachment" referrerPolicy="no-referrer" />
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => onViewPdf?.(h.attachmentUrl!, h.title)}
+                                                        className="w-full flex items-center gap-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                    >
+                                                        <FileIcon size={20} className="text-insan-blue" />
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left">Voir le document PDF</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
                                             <Calendar size={12} className="text-slate-400"/>
                                             <span className="text-[10px] text-slate-400 font-bold">Assigné par vous</span>
@@ -340,24 +381,53 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({
                                 <form onSubmit={handleAddHomework} className="p-8 space-y-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Classe / Cours cible</label>
-                                        <select required value={newHwCourseId} onChange={e => setNewHwCourseId(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none focus:ring-2 focus:ring-insan-blue/20">
+                                        <select required value={newHwCourseId || ''} onChange={e => setNewHwCourseId(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none focus:ring-2 focus:ring-insan-blue/20">
                                             <option value="">Sélectionner une de vos classes...</option>
                                             {myCourses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Titre du devoir</label>
-                                        <input required type="text" placeholder="Ex: Étude de texte" value={newHwTitle} onChange={e => setNewHwTitle(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none focus:ring-2 focus:ring-insan-blue/20" />
+                                        <input required type="text" placeholder="Ex: Étude de texte" value={newHwTitle || ''} onChange={e => setNewHwTitle(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none focus:ring-2 focus:ring-insan-blue/20" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Date d'échéance</label>
-                                            <input required type="date" value={newHwDate} onChange={e => setNewHwDate(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none" />
+                                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Date d'échéance (Optionnel)</label>
+                                            <input type="date" value={newHwDate || ''} onChange={e => setNewHwDate(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Pièce jointe (Image/PDF)</label>
+                                            <div className="relative">
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*,.pdf" 
+                                                    onChange={handleFileChange}
+                                                    className="hidden" 
+                                                    id="hw-file-upload"
+                                                />
+                                                <label 
+                                                    htmlFor="hw-file-upload"
+                                                    className={`flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-xl p-3 cursor-pointer transition-all ${newHwAttachment ? 'border-insan-blue bg-blue-50/50 text-insan-blue' : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-insan-blue hover:text-insan-blue'}`}
+                                                >
+                                                    {newHwAttachment ? (
+                                                        <>
+                                                            {newHwAttachment.type === 'image' ? <ImageIcon size={18}/> : <FileIcon size={18}/>}
+                                                            <span className="text-xs font-bold truncate max-w-[120px]">Fichier ajouté</span>
+                                                            <button type="button" onClick={(e) => { e.preventDefault(); setNewHwAttachment(null); }} className="ml-auto text-red-500 hover:text-red-700"><X size={16}/></button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Paperclip size={18} />
+                                                            <span className="text-xs font-bold">Ajouter un fichier</span>
+                                                        </>
+                                                    )}
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Instructions détaillées</label>
-                                        <textarea required placeholder="Précisez le travail à effectuer..." value={newHwDesc} onChange={e => setNewHwDesc(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none min-h-[120px] focus:ring-2 focus:ring-insan-blue/20"></textarea>
+                                        <textarea required placeholder="Précisez le travail à effectuer..." value={newHwDesc || ''} onChange={e => setNewHwDesc(e.target.value)} className="w-full border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 dark:text-white shadow-sm outline-none min-h-[120px] focus:ring-2 focus:ring-insan-blue/20"></textarea>
                                     </div>
                                     <Button type="submit" className="w-full mt-4">Publier dans le cahier de textes</Button>
                                 </form>

@@ -15,11 +15,12 @@ interface PoleDashboardProps {
     settings?: InstituteSettings;
     poles: Pole[];
     onClockIn: (isExit: boolean) => void;
+    onReadMore?: (news: NewsItem) => void;
 }
 
-const PoleDashboard: React.FC<PoleDashboardProps> = ({ user, courses, attendance, users, poles, news, onClockIn, settings }) => {
-    const myPole = poles?.find(p => p.id === user.managedPole);
-    const poleCourses = courses.filter(c => c.pole === user.managedPole);
+const PoleDashboard: React.FC<PoleDashboardProps> = ({ user, courses, attendance, users, poles, news, onClockIn, settings, onReadMore }) => {
+    const myPoles = poles?.filter(p => user.managedPoleIds?.includes(p.id)) || [];
+    const poleCourses = courses.filter(c => user.managedPoleIds?.includes(c.pole));
     const poleStudents = users.filter(u => u.role === UserRole.STUDENT && poleCourses.some(c => c.id === u.classId));
     
     const totalSessions = attendance.filter(r => poleCourses.some(c => c.id === r.courseId)).length;
@@ -33,7 +34,10 @@ const PoleDashboard: React.FC<PoleDashboardProps> = ({ user, courses, attendance
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <PageHeader title={`Pôle ${myPole?.name || 'Indéfini'}`} subtitle="Pilotage du département." />
+            <PageHeader 
+                title={myPoles.length > 1 ? "Mes Pôles" : `Pôle ${myPoles[0]?.name || 'Indéfini'}`} 
+                subtitle={myPoles.length > 1 ? `Gestion de ${myPoles.map(p => p.name).join(', ')}` : "Pilotage du département."} 
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 bg-gradient-to-br from-insan-blue to-indigo-900 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-lg">
@@ -109,7 +113,11 @@ const PoleDashboard: React.FC<PoleDashboardProps> = ({ user, courses, attendance
                         </div>
                         <div className="space-y-4">
                             {news.slice(0, 4).map(n => (
-                                <div key={n.id} className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex gap-4 ${n.isUrgent ? 'bg-red-50/30 dark:bg-red-900/20 border-red-100 dark:border-red-900/30' : 'bg-white dark:bg-slate-800'}`}>
+                                <div 
+                                    key={n.id} 
+                                    onClick={() => onReadMore?.(n)}
+                                    className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex gap-4 cursor-pointer transition-all hover:border-insan-blue/50 ${n.isUrgent ? 'bg-red-50/30 dark:bg-red-900/20 border-red-100 dark:border-red-900/30' : 'bg-white dark:bg-slate-800'}`}
+                                >
                                     {(n.coverUrl || n.mediaUrl) && <img src={n.coverUrl || n.mediaUrl} className="w-20 h-20 rounded-xl object-cover shrink-0" alt="" referrerPolicy="no-referrer" />}
                                     <div className="flex-1">
                                         <div className="flex justify-between items-center mb-1">

@@ -36,6 +36,7 @@ export interface Pole {
   id: string;
   name: string;
   color: string;
+  managerIds?: string[];
 }
 
 export interface User {
@@ -47,7 +48,7 @@ export interface User {
   function?: string;
   avatar?: string;
   classId?: string;
-  managedPole?: string;
+  managedPoleIds?: string[];
   hourlyRate?: number;
   contractHours?: number;
   phone?: string;
@@ -80,6 +81,7 @@ export interface PaymentEntry {
   method: string;
   recordedBy: string;
   isConfirmed: boolean;
+  encashmentDate?: '5' | '15';
 }
 
 export interface StudentInfo {
@@ -108,6 +110,7 @@ export interface RegistrationDossier {
   id: string;
   status?: RegistrationStatus;
   createdAt?: string;
+  createdBy?: string;
   updatedAt: string;
   cancelledAt?: string;
   updatedBy: string;
@@ -141,6 +144,7 @@ export interface RegistrationDossier {
   signature?: string;
   signedAt?: string;
   cgvAccepted?: boolean;
+  submittedForms?: StudentFormRequest[];
 }
 
 export interface PricingSettings {
@@ -153,6 +157,14 @@ export interface PricingSettings {
     multiChild: number;
   };
   paymentMethods?: string[];
+}
+
+export interface AvailabilitySlot {
+  id: string;
+  userId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
 }
 
 export interface WorkSchedule {
@@ -179,6 +191,19 @@ export interface LeaveRequest {
   status: LeaveStatus;
   requestDate: string;
   replacementUserId?: string;
+}
+
+export interface ReplacementSlot {
+  id: string;
+  leaveRequestId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  originalUserId: string;
+  replacementUserId?: string;
+  activityTitle: string;
+  type: 'COURSE' | 'SCHEDULE';
+  courseId?: string;
 }
 
 export interface GlobalHoliday {
@@ -232,6 +257,7 @@ export interface AttendanceRecord {
   courseId: string;
   date: string;
   status: AttendanceStatus;
+  recordedBy?: string;
   entryTimestamp?: string; 
   exitTimestamp?: string;
   justification?: string;
@@ -253,8 +279,10 @@ export interface Homework {
   courseId: string;
   title: string;
   description: string;
-  dueDate: string;
+  dueDate?: string;
   assignedBy: string;
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'pdf';
 }
 
 export interface NewsItem {
@@ -281,6 +309,14 @@ export interface Notification {
   type: 'info' | 'warning' | 'error' | 'success';
   read: boolean;
   time: string;
+  link?: string;
+  metadata?: {
+    newsId?: string;
+    roomId?: string;
+    courseId?: string;
+    type?: 'news' | 'chat' | 'course' | 'attendance_alert';
+    key?: string;
+  };
 }
 
 export interface Room {
@@ -299,12 +335,26 @@ export interface InstituteSettings {
   currency?: string;
   cgv?: string;
   cgvExcerpt?: string;
+  logo?: string;
+  logoDark?: string;
+  lateThresholdMinutes: number;
+  emailTemplate?: {
+    subject: string;
+    body: string;
+    attachments?: { filename: string; path?: string; content?: string }[];
+  };
 }
 
 export enum ChatRoomType {
   CLASS = 'CLASS',
   GROUP = 'GROUP',
   PRIVATE = 'PRIVATE'
+}
+
+export interface ChatRoomSettings {
+  canMembersAddOthers: boolean;
+  canMembersSendMessages: boolean;
+  canMembersCreateGroups?: boolean;
 }
 
 export interface ChatRoom {
@@ -316,6 +366,7 @@ export interface ChatRoom {
   courseId?: string;
   communityId?: string;
   createdAt: string;
+  settings?: ChatRoomSettings;
 }
 
 export interface ChatMessage {
@@ -364,6 +415,15 @@ export interface TestCourse {
   createdAt: string;
 }
 
+export enum WaitingListStatus {
+  WAITING = 'En attente',
+  TO_CONTACT = 'À contacter',
+  REFUSED = 'Refusé',
+  REGISTERED = 'Inscrit',
+  MUST_REGISTER = 'Doit venir s\'inscrire',
+  NO_RESPONSE = 'Sans réponse'
+}
+
 export interface WaitingListEntry {
   id: string;
   firstName: string;
@@ -374,4 +434,79 @@ export interface WaitingListEntry {
   poleId: string;
   courseId: string;
   createdAt: string;
+  status: WaitingListStatus;
+}
+
+export enum DocStatus {
+  PENDING = 'PENDING',
+  VALIDATED = 'VALIDATED',
+  EXPIRED = 'EXPIRED',
+  REJECTED = 'REJECTED'
+}
+
+export interface DocCategory {
+  id: string;
+  name: string;
+  isMandatory: boolean;
+}
+
+export interface EmployeeDoc {
+  id: string;
+  employeeId: string;
+  categoryId: string;
+  name: string;
+  fileUrl?: string; // The URL of the file uploaded by employee
+  adminAttachmentUrl?: string; // The URL of the file sent by admin (e.g. contract to sign)
+  status: DocStatus;
+  expiryDate?: string;
+  message?: string; // Message from admin or employee
+  comments?: string;
+  uploadedAt?: string;
+  updatedAt: string;
+}
+
+export interface KeyLog {
+  id: string;
+  userId: string;
+  roomName: string;
+  borrowedAt: string;
+  returnedAt?: string;
+  isReturned: boolean;
+  notes?: string;
+}
+
+// --- STUDENT DOCUMENTATION & FORMS ---
+export enum FormFieldType {
+  TEXT = 'TEXT',
+  NUMBER = 'NUMBER',
+  DATE = 'DATE',
+  CHECKBOX = 'CHECKBOX',
+  LONG_TEXT = 'LONG_TEXT'
+}
+
+export interface FormFieldDefinition {
+  id: string;
+  label: string;
+  type: FormFieldType;
+  required: boolean;
+  placeholder?: string;
+}
+
+export interface StudentFormTemplate {
+  id: string;
+  title: string;
+  description: string;
+  fields: FormFieldDefinition[];
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface StudentFormRequest {
+  id: string;
+  templateId: string;
+  studentId: string;
+  status: 'PENDING' | 'COMPLETED';
+  requestedAt: string;
+  submittedAt?: string;
+  submittedData?: Record<string, any>;
 }

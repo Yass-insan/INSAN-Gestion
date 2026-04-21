@@ -23,14 +23,34 @@ interface CourseManagementProps {
   poles: Pole[];
   dossiers: RegistrationDossier[];
   settings?: InstituteSettings;
+  currentUser?: User;
   onManage: (action: 'add' | 'update' | 'delete', course: Course) => void;
   onManagePoles: (action: 'add' | 'update' | 'delete', pole: Pole) => void;
 }
 
-const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, poles, dossiers, settings, onManage, onManagePoles }) => {
+const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, poles, dossiers, settings, currentUser, onManage, onManagePoles }) => {
     // UI State
     const [activeTab, setActiveTab] = useState<'planning' | 'poles'>('planning');
     const { showToast } = useToast();
+
+    const isResponsible = currentUser?.role === UserRole.RESPONSIBLE || currentUser?.secondaryRoles?.includes(UserRole.RESPONSIBLE);
+
+    // Filtrage initial par rôle (Responsable de pôle)
+    const accessiblePoles = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return poles;
+        if (isResponsible) {
+            return poles.filter(p => currentUser.managedPoleIds?.includes(p.id));
+        }
+        return poles;
+    }, [poles, currentUser, isResponsible]);
+
+    const accessibleCourses = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return courses;
+        if (isResponsible) {
+            return courses.filter(c => currentUser.managedPoleIds?.includes(c.pole));
+        }
+        return courses;
+    }, [courses, currentUser, isResponsible]);
     
     // Course Modal State
     const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
@@ -74,7 +94,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
 
     const courseInstances = useMemo(() => {
         const instances: { course: Course; startTime: string; endTime: string; dayOfWeek: number; id: string }[] = [];
-        courses.forEach(c => {
+        accessibleCourses.forEach(c => {
             // Add primary schedule
             instances.push({ course: c, startTime: c.startTime, endTime: c.endTime, dayOfWeek: c.dayOfWeek, id: `${c.id}-0` });
             // Add extra schedules
@@ -85,7 +105,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
             }
         });
         return instances;
-    }, [courses]);
+    }, [accessibleCourses]);
 
     const calculatePosition = (startTime: string, endTime: string) => {
         const timeToMin = (t: string) => {
@@ -201,7 +221,8 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
         const poleData: Pole = {
             id: newPole.id.toUpperCase().replace(/\s+/g, '_'),
             name: newPole.name,
-            color: newPole.color || '#262262'
+            color: newPole.color || '#262262',
+            managerIds: newPole.managerIds || []
         };
         onManagePoles(editingPole ? 'update' : 'add', poleData);
         showToast(editingPole ? "Pôle mis à jour !" : "Nouveau pôle créé !", "success");
@@ -299,8 +320,9 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                             </Button>
                         </div>
 
-                        <Card className="overflow-hidden border-0 shadow-2xl bg-white dark:bg-slate-900 rounded-[2.5rem]">
-                            <div className="flex bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-30">
+                        <Card className="overflow-x-auto border-0 shadow-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] custom-scrollbar">
+                            <div className="min-w-[1000px]">
+                                <div className="flex bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-30">
                                 <div className="w-16 shrink-0 border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 flex items-center justify-center sticky left-0 z-40"><Clock size={14} className="text-slate-300"/></div>
                                 <div className="flex-1 flex overflow-x-auto custom-scrollbar">
                                     {planningMode === 'by-day' ? (
@@ -353,7 +375,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                             <div key={room.name} className="min-w-[180px] flex-1 border-r border-slate-50 dark:border-slate-800 last:border-0 relative">
                                                 {courseInstances.filter(ci => ci.dayOfWeek === selectedDayIdx && ci.course.room === room.name).map(instance => {
                                                     const { top, height } = calculatePosition(instance.startTime, instance.endTime);
-                                                    const pole = poles.find(p => p.id === instance.course.pole);
+                                                    const pole = accessiblePoles.find(p => p.id === instance.course.pole);
                                                     return (
                                                         <div 
                                                             key={instance.id}
@@ -363,7 +385,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                                         >
                                                             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                                             <p className="text-[9px] font-black text-white leading-tight uppercase relative z-10 truncate">{instance.course.name}</p>
-                                                            <p className="text-[8px] font-bold text-white/70 relative z-10">{instance.startTime}</p>
+                                                            <p className="text-[8px] font-bold text-white/70 relative z-10">{instance.startTime} - {instance.endTime}</p>
                                                         </div>
                                                     );
                                                 })}
@@ -374,7 +396,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                             <div key={day.id} className="min-w-[180px] flex-1 border-r border-slate-50 dark:border-slate-800 last:border-0 relative">
                                                 {courseInstances.filter(ci => ci.dayOfWeek === day.id && ci.course.room === selectedRoomName).map(instance => {
                                                     const { top, height } = calculatePosition(instance.startTime, instance.endTime);
-                                                    const pole = poles.find(p => p.id === instance.course.pole);
+                                                    const pole = accessiblePoles.find(p => p.id === instance.course.pole);
                                                     return (
                                                         <div 
                                                             key={instance.id}
@@ -384,7 +406,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                                         >
                                                             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                                             <p className="text-[9px] font-black text-white leading-tight uppercase relative z-10 truncate">{instance.course.name}</p>
-                                                            <p className="text-[8px] font-bold text-white/70 relative z-10">{instance.startTime}</p>
+                                                            <p className="text-[8px] font-bold text-white/70 relative z-10">{instance.startTime} - {instance.endTime}</p>
                                                         </div>
                                                     );
                                                 })}
@@ -404,7 +426,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                                         <div key={room.name} className="min-w-[100px] border-r border-slate-50 dark:border-slate-800 last:border-0 relative">
                                                             {courseInstances.filter(ci => ci.dayOfWeek === day.id && ci.course.room === room.name).map(instance => {
                                                                 const { top, height } = calculatePosition(instance.startTime, instance.endTime);
-                                                                const pole = poles.find(p => p.id === instance.course.pole);
+                                                                const pole = accessiblePoles.find(p => p.id === instance.course.pole);
                                                                 return (
                                                                     <div 
                                                                         key={instance.id}
@@ -414,7 +436,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                                                     >
                                                                         <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                                                         <p className="text-[8px] font-black text-white leading-tight uppercase relative z-10 truncate">{instance.course.name}</p>
-                                                                        <p className="text-[7px] font-bold text-white/70 relative z-10">{instance.startTime}</p>
+                                                                        <p className="text-[7px] font-bold text-white/70 relative z-10">{instance.startTime} - {instance.endTime}</p>
                                                                     </div>
                                                                 );
                                                             })}
@@ -426,13 +448,14 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                     )}
                                 </div>
                             </div>
-                        </Card>
-                    </div>
+                        </div>
+                    </Card>
+                </div>
 
                     {/* CATALOGUE CARDS */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-4">
-                        {courses.map(course => {
-                            const pole = poles.find(p => p.id === course.pole);
+                        {accessibleCourses.map(course => {
+                            const pole = accessiblePoles.find(p => p.id === course.pole);
                             const occ = getPhysicalOccupancy(course.id);
                             return (
                                 <Card key={course.id} className="p-8 border-2 border-slate-50 dark:border-slate-800 hover:border-insan-blue/20 transition-all cursor-pointer group" onClick={() => openEditCourse(course)}>
@@ -502,10 +525,41 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                         <input 
                                             type="color" 
                                             className="w-16 h-16 rounded-2xl border-0 bg-transparent cursor-pointer"
-                                            value={newPole.color}
+                                            value={newPole.color || '#2563eb'}
                                             onChange={e => setNewPole({...newPole, color: e.target.value})}
                                         />
                                         <div className="flex-1 font-mono text-xs font-bold text-slate-400">{newPole.color?.toUpperCase()}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 flex items-center gap-2"><Users size={12}/> Responsables du Pôle</label>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                        {users.filter(u => u.role !== UserRole.STUDENT).map(u => {
+                                            const isSelected = newPole.managerIds?.includes(u.id);
+                                            return (
+                                                <div 
+                                                    key={u.id}
+                                                    onClick={() => {
+                                                        const current = newPole.managerIds || [];
+                                                        setNewPole({
+                                                            ...newPole,
+                                                            managerIds: isSelected ? current.filter(id => id !== u.id) : [...current, u.id]
+                                                        });
+                                                    }}
+                                                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-3 ${isSelected ? 'bg-blue-50 border-insan-blue dark:bg-blue-900/30' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}
+                                                >
+                                                    <img src={u.avatar} alt="" className="w-6 h-6 rounded-full" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{u.name}</span>
+                                                        <span className="text-[8px] font-bold text-slate-400 uppercase">{u.function || u.role}</span>
+                                                    </div>
+                                                    {isSelected && <Check size={14} className="ml-auto text-insan-blue" />}
+                                                </div>
+                                            );
+                                        })}
+                                        {users.filter(u => u.role !== UserRole.STUDENT).length === 0 && (
+                                            <p className="text-[10px] text-slate-400 italic">Aucun utilisateur trouvé.</p>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="pt-4">
@@ -526,18 +580,37 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                             <Badge color="gray">{poles.length} Pôles</Badge>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {poles.map(p => (
+                            {accessiblePoles.map(p => (
                                 <Card key={p.id} className="p-6 flex items-center justify-between group hover:shadow-xl transition-all border-l-8" style={{ borderLeftColor: p.color }}>
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white shadow-lg" style={{ backgroundColor: p.color }}>{p.name.charAt(0)}</div>
                                         <div>
                                             <p className="font-black text-slate-800 dark:text-white">{p.name}</p>
                                             <p className="text-[10px] font-mono text-slate-400 font-bold uppercase">{p.id}</p>
+                                            {p.managerIds && p.managerIds.length > 0 && (
+                                                <div className="flex -space-x-2 mt-1">
+                                                    {p.managerIds.map(mid => {
+                                                        const manager = users.find(u => u.id === mid);
+                                                        if (!manager) return null;
+                                                        return (
+                                                            <img 
+                                                                key={mid} 
+                                                                src={manager.avatar} 
+                                                                title={manager.name}
+                                                                className="w-5 h-5 rounded-full border-2 border-white dark:border-slate-800"
+                                                                alt={manager.name}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <button onClick={() => openEditPole(p)} className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-insan-blue"><Edit2 size={16}/></button>
-                                        <button onClick={() => setDeleteConfirm({ type: 'pole', item: p })} className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                        {currentUser?.role === UserRole.ADMIN && (
+                                            <button onClick={() => setDeleteConfirm({ type: 'pole', item: p })} className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                        )}
                                     </div>
                                 </Card>
                             ))}
@@ -576,7 +649,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Pôle de rattachement</label>
                                     <select className="w-full border-slate-200 dark:border-slate-700 rounded-2xl p-4 bg-slate-50 dark:bg-slate-800 font-black text-sm outline-none dark:text-white" value={newCourse.pole || ''} onChange={e => setNewCourse({...newCourse, pole: e.target.value})}>
                                         <option value="">-- Choisir un pôle --</option>
-                                        {poles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        {accessiblePoles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -633,7 +706,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                             <div className="flex-1 grid grid-cols-3 gap-4">
                                                 <select 
                                                     className="bg-transparent font-black text-xs outline-none"
-                                                    value={s.dayOfWeek}
+                                                    value={s.dayOfWeek ?? 1}
                                                     onChange={e => updateSchedule(idx, 'dayOfWeek', Number(e.target.value))}
                                                 >
                                                     {days.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
@@ -641,13 +714,13 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, users, pol
                                                 <input 
                                                     type="time" 
                                                     className="bg-transparent font-bold text-xs outline-none"
-                                                    value={s.startTime}
+                                                    value={s.startTime || ''}
                                                     onChange={e => updateSchedule(idx, 'startTime', e.target.value)}
                                                 />
                                                 <input 
                                                     type="time" 
                                                     className="bg-transparent font-bold text-xs outline-none"
-                                                    value={s.endTime}
+                                                    value={s.endTime || ''}
                                                     onChange={e => updateSchedule(idx, 'endTime', e.target.value)}
                                                 />
                                             </div>

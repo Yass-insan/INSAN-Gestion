@@ -55,7 +55,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                                 <input 
                                                     type="number" 
                                                     className="w-20 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold outline-none focus:ring-2 focus:ring-insan-blue/20 bg-white dark:bg-slate-900 dark:text-white text-xs"
-                                                    value={config.onSite}
+                                                    value={config.onSite ?? 0}
                                                     onChange={e => {
                                                         const newPrices = { ...localPricing.coursePrices, [c.id]: { ...config, onSite: Number(e.target.value) } };
                                                         setLocalPricing({...localPricing, coursePrices: newPrices});
@@ -70,7 +70,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                                 <input 
                                                     type="number" 
                                                     className="w-20 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold outline-none focus:ring-2 focus:ring-insan-blue/20 bg-white dark:bg-slate-900 dark:text-white text-xs"
-                                                    value={config.remote}
+                                                    value={config.remote ?? 0}
                                                     onChange={e => {
                                                         const newPrices = { ...localPricing.coursePrices, [c.id]: { ...config, remote: Number(e.target.value) } };
                                                         setLocalPricing({...localPricing, coursePrices: newPrices});
@@ -102,7 +102,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                     <input 
                                         type="number" 
                                         className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                        value={localPricing.dossierFees}
+                                        value={localPricing.dossierFees ?? 0}
                                         onChange={e => setLocalPricing({...localPricing, dossierFees: Number(e.target.value)})}
                                     />
                                     <span className="font-bold text-slate-400 dark:text-slate-500">{currency}</span>
@@ -117,7 +117,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                     <input 
                                         type="number" 
                                         className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                        value={localPricing.hybridSurcharge}
+                                        value={localPricing.hybridSurcharge ?? 0}
                                         onChange={e => setLocalPricing({...localPricing, hybridSurcharge: Number(e.target.value)})}
                                     />
                                     <span className="font-bold text-slate-400 dark:text-slate-500">{currency}</span>
@@ -132,7 +132,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                     <input 
                                         type="number" 
                                         className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                        value={localPricing.montessoriFees}
+                                        value={localPricing.montessoriFees ?? 0}
                                         onChange={e => setLocalPricing({...localPricing, montessoriFees: Number(e.target.value)})}
                                     />
                                     <span className="font-bold text-slate-400 dark:text-slate-500">{currency}</span>
@@ -156,7 +156,7 @@ const TarificationSettings: React.FC<TarificationSettingsProps> = ({ pricing, co
                                     <input 
                                         type="number" 
                                         className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-bold bg-white dark:bg-slate-800 dark:text-white"
-                                        value={localPricing.discounts.multiCourse}
+                                        value={localPricing.discounts.multiCourse ?? 0}
                                         onChange={e => setLocalPricing({
                                             ...localPricing, 
                                             discounts: { ...localPricing.discounts, multiCourse: Number(e.target.value) }

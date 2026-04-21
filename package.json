@@ -4,24 +4,33 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "date-fns": "^4.1.0",
+    "express": "^5.2.1",
     "lucide-react": "^0.556.0",
+    "motion": "^12.38.0",
+    "papaparse": "^5.5.3",
     "react": "^19.2.1",
+    "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.1",
-    "recharts": "^3.5.1"
+    "recharts": "^3.5.1",
+    "resend": "^6.10.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
+    "@types/papaparse": "^5.5.2",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

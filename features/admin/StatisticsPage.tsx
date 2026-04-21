@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Course, AttendanceRecord, User, Pole, RegistrationDossier, RegistrationStatus } from '../../types';
+import { Course, AttendanceRecord, User, UserRole, Pole, RegistrationDossier, RegistrationStatus, CourseFormula } from '../../types';
 import { Card, Badge, Button } from '../../components/ui/DesignSystem';
 import { 
     FileText, 
@@ -25,7 +25,8 @@ import {
     Search,
     BookOpen,
     AlertCircle,
-    Ban
+    Ban,
+    Globe
 } from 'lucide-react';
 import { 
     AreaChart, 
@@ -43,6 +44,11 @@ import {
     Legend
 } from 'recharts';
 import { getTranslation } from '../../services/i18n';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import { fr } from 'date-fns/locale/fr';
+import "react-datepicker/dist/react-datepicker.css";
+
+registerLocale('fr', fr);
 
 interface StatisticsPageProps {
     courses: Course[];
@@ -52,12 +58,50 @@ interface StatisticsPageProps {
     dossiers: RegistrationDossier[];
     initialFilters?: { poleId: string; classId: string };
     settings?: any;
+    currentUser?: User;
 }
 
-export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attendance, users, poles, dossiers, initialFilters, settings }) => {
+export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attendance, users, poles, dossiers, initialFilters, settings, currentUser }) => {
     // --- ÉTAT DES FILTRES ---
     const [selectedPole, setSelectedPole] = useState('ALL');
     const [selectedClass, setSelectedClass] = useState('ALL');
+    const [startDate, setStartDate] = useState<Date | null>(null);
+    const [endDate, setEndDate] = useState<Date | null>(null);
+
+    const isResponsible = currentUser?.role === UserRole.RESPONSIBLE || currentUser?.secondaryRoles?.includes(UserRole.RESPONSIBLE);
+
+    // Filtrage initial par rôle (Responsable de pôle)
+    const accessiblePoles = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return poles;
+        if (isResponsible) {
+            return poles.filter(p => currentUser.managedPoleIds?.includes(p.id));
+        }
+        return poles;
+    }, [poles, currentUser, isResponsible]);
+
+    const accessibleCourses = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return courses;
+        if (isResponsible) {
+            return courses.filter(c => currentUser.managedPoleIds?.includes(c.pole));
+        }
+        return courses;
+    }, [courses, currentUser, isResponsible]);
+
+    const accessibleDossiers = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return dossiers;
+        if (isResponsible) {
+            return dossiers.filter(d => d.enrollments.some(e => accessibleCourses.some(c => c.id === e.courseId)));
+        }
+        return dossiers;
+    }, [dossiers, accessibleCourses, currentUser, isResponsible]);
+
+    const accessibleAttendance = useMemo(() => {
+        if (currentUser?.role === UserRole.ADMIN) return attendance;
+        if (isResponsible) {
+            return attendance.filter(r => accessibleCourses.some(c => c.id === r.courseId));
+        }
+        return attendance;
+    }, [attendance, accessibleCourses, currentUser, isResponsible]);
 
     const lang = settings?.language || 'fr';
     const currency = settings?.currency || '€';
@@ -73,28 +117,43 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
 
     // --- LOGIQUE DE FILTRAGE ---
     const filteredCourses = useMemo(() => {
-        return courses.filter(c => selectedPole === 'ALL' || c.pole === selectedPole);
-    }, [courses, selectedPole]);
+        return accessibleCourses.filter(c => selectedPole === 'ALL' || c.pole === selectedPole);
+    }, [accessibleCourses, selectedPole]);
 
     const filteredDossiers = useMemo(() => {
-        return dossiers.filter(d => {
+        return accessibleDossiers.filter(d => {
             const matchesPole = selectedPole === 'ALL' || d.enrollments.some(e => {
-                const c = courses.find(course => course.id === e.courseId);
+                const c = accessibleCourses.find(course => course.id === e.courseId);
                 return c?.pole === selectedPole;
             });
             const matchesClass = selectedClass === 'ALL' || d.enrollments.some(e => e.courseId === selectedClass);
-            return matchesPole && matchesClass;
+            
+            const dossierDate = d.createdAt ? d.createdAt.split('T')[0] : '';
+            const startStr = startDate ? startDate.toISOString().split('T')[0] : '';
+            const endStr = endDate ? endDate.toISOString().split('T')[0] : '';
+
+            const matchesStart = !startDate || dossierDate >= startStr;
+            const matchesEnd = !endDate || dossierDate <= endStr;
+            
+            return matchesPole && matchesClass && matchesStart && matchesEnd;
         });
-    }, [dossiers, courses, selectedPole, selectedClass]);
+    }, [accessibleDossiers, accessibleCourses, selectedPole, selectedClass, startDate, endDate]);
 
     const filteredAttendance = useMemo(() => {
-        return attendance.filter(r => {
-            const course = courses.find(c => c.id === r.courseId);
+        return accessibleAttendance.filter(r => {
+            const course = accessibleCourses.find(c => c.id === r.courseId);
             const matchesPole = selectedPole === 'ALL' || course?.pole === selectedPole;
             const matchesClass = selectedClass === 'ALL' || r.courseId === selectedClass;
-            return matchesPole && matchesClass;
+            
+            const startStr = startDate ? startDate.toISOString().split('T')[0] : '';
+            const endStr = endDate ? endDate.toISOString().split('T')[0] : '';
+
+            const matchesStart = !startDate || r.date >= startStr;
+            const matchesEnd = !endDate || r.date <= endStr;
+
+            return matchesPole && matchesClass && matchesStart && matchesEnd;
         });
-    }, [attendance, courses, selectedPole, selectedClass]);
+    }, [accessibleAttendance, accessibleCourses, selectedPole, selectedClass, startDate, endDate]);
 
     // --- CALCULS ABSENTÉISME ---
     const attendanceStats = useMemo(() => {
@@ -181,6 +240,100 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
         };
     }, [filteredDossiers]);
 
+    const studentStats = useMemo(() => {
+        const studentMap = new Map<string, CourseFormula[]>();
+        
+        filteredDossiers.forEach(d => {
+            if (d.status === RegistrationStatus.CANCELLED) return;
+            
+            d.enrollments.forEach(e => {
+                if (e.status === RegistrationStatus.CANCELLED) return;
+                
+                const formulas = studentMap.get(e.studentId) || [];
+                if (e.formula && !formulas.includes(e.formula)) {
+                    formulas.push(e.formula);
+                }
+                studentMap.set(e.studentId, formulas);
+            });
+        });
+
+        let total = studentMap.size;
+        let onSite = 0;
+        let remote = 0;
+        let hybrid = 0;
+
+        studentMap.forEach((formulas) => {
+            if (formulas.includes(CourseFormula.HYBRID)) {
+                hybrid++;
+            } else if (formulas.includes(CourseFormula.ON_SITE)) {
+                onSite++;
+            } else if (formulas.includes(CourseFormula.REMOTE)) {
+                remote++;
+            }
+        });
+
+        return { total, onSite, remote, hybrid };
+    }, [filteredDossiers]);
+
+    // --- NOUVELLES STATISTIQUES DE SEGMENT (RÉEL/POTENTIEL/CA/DÉPENSES) ---
+    const segmentStats = useMemo(() => {
+        const relevantCourses = accessibleCourses.filter(c => 
+            (selectedPole === 'ALL' || c.pole === selectedPole) &&
+            (selectedClass === 'ALL' || c.id === selectedClass)
+        );
+
+        let reel = 0;
+        let physique = 0;
+        let ca = 0;
+        let depense = 0;
+        let potentiel = 0;
+
+        // Effectif Réel & CA (Inscriptions actives)
+        filteredDossiers.forEach(d => {
+            if (d.status === RegistrationStatus.CANCELLED) return;
+            d.enrollments.forEach(e => {
+                if (e.status === RegistrationStatus.CANCELLED) return;
+                
+                const course = accessibleCourses.find(c => c.id === e.courseId);
+                if (!course) return;
+
+                const matchesPole = selectedPole === 'ALL' || course.pole === selectedPole;
+                const matchesClass = selectedClass === 'ALL' || e.courseId === selectedClass;
+
+                if (matchesPole && matchesClass) {
+                    reel++;
+                    // Seuls les élèves en présentiel ou hybride occupent une place physique
+                    if (e.formula !== CourseFormula.REMOTE) {
+                        physique++;
+                    }
+                    ca += (e.basePrice + (e.formulaSurcharge || 0));
+                }
+            });
+        });
+
+        // Potentiel & Dépense
+        relevantCourses.forEach(c => {
+            potentiel += (c.capacity || 0);
+            
+            // Calcul des dépenses profs (Estimation hebdo * 30 semaines)
+            const [startH, startM] = c.startTime.split(':').map(Number);
+            const [endH, endM] = c.endTime.split(':').map(Number);
+            const durationHours = Math.max(0, (endH + endM/60) - (startH + startM/60));
+            
+            c.professorIds?.forEach(pId => {
+                const prof = users.find(u => u.id === pId);
+                if (prof?.hourlyRate) {
+                    depense += (prof.hourlyRate * durationHours * 30);
+                }
+            });
+        });
+
+        const occupationRate = potentiel > 0 ? Math.round((physique / potentiel) * 100) : 0;
+        const placesRestantes = Math.max(0, potentiel - physique);
+
+        return { reel, physique, potentiel, ca, depense, occupationRate, placesRestantes };
+    }, [filteredDossiers, accessibleCourses, selectedPole, selectedClass, users]);
+
     // --- GRAPH DATA ---
     const attendancePieData = [
         { name: t('present'), value: attendanceStats.present, color: '#10b981' },
@@ -236,7 +389,7 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                             className="w-full bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-black shadow-inner outline-none focus:ring-2 focus:ring-insan-blue/20 dark:text-white"
                         >
                             <option value="ALL">Tous les pôles</option>
-                            {poles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            {accessiblePoles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                     </div>
                     <div className="flex-1 lg:flex-none">
@@ -250,9 +403,82 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                             {filteredCourses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
-                    <Button variant="secondary" onClick={() => { setSelectedPole('ALL'); setSelectedClass('ALL'); }} className="h-[46px] mt-auto">
+                    <div className="flex-1 lg:flex-none">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1 px-2 flex items-center gap-1"><Calendar size={10}/> Période</label>
+                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-0.5 shadow-inner">
+                            <DatePicker
+                                selected={startDate}
+                                onChange={(date) => setStartDate(date)}
+                                selectsStart
+                                startDate={startDate}
+                                endDate={endDate}
+                                placeholderText="Début"
+                                locale="fr"
+                                dateFormat="dd/MM/yyyy"
+                                className="w-24 bg-transparent border-none text-xs font-black outline-none dark:text-white"
+                            />
+                            <span className="text-slate-300 dark:text-slate-600 font-bold">→</span>
+                            <DatePicker
+                                selected={endDate}
+                                onChange={(date) => setEndDate(date)}
+                                selectsEnd
+                                startDate={startDate}
+                                endDate={endDate}
+                                minDate={startDate || undefined}
+                                placeholderText="Fin"
+                                locale="fr"
+                                dateFormat="dd/MM/yyyy"
+                                className="w-24 bg-transparent border-none text-xs font-black outline-none dark:text-white"
+                            />
+                        </div>
+                    </div>
+                    <Button variant="secondary" onClick={() => { setSelectedPole('ALL'); setSelectedClass('ALL'); setStartDate(null); setEndDate(null); }} className="h-[46px] mt-auto">
                         <X size={16}/>
                     </Button>
+                </div>
+            </div>
+
+            {/* NOUVELLE SECTION: RÉSUMÉ DU SEGMENT */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 animate-fade-in">
+                <div className="flex items-center gap-3 mb-6 px-2">
+                    <div className="p-2 bg-insan-blue rounded-lg text-white">
+                        <Activity size={18}/>
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Résumé {selectedPole === 'ALL' ? 'Global' : selectedClass === 'ALL' ? 'du Pôle' : 'de la Classe'}</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Réel</p>
+                        <p className="text-2xl font-black text-slate-800 dark:text-white tracking-tighter">{segmentStats.reel}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">{segmentStats.physique} Physique / {segmentStats.reel - segmentStats.physique} Dist.</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Potentiel</p>
+                        <p className="text-2xl font-black text-slate-800 dark:text-white tracking-tighter">{segmentStats.potentiel}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Capacité</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">CA</p>
+                        <p className="text-2xl font-black text-insan-blue dark:text-blue-400 tracking-tighter">{segmentStats.ca.toLocaleString()} {currency}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Revenus</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Dépense</p>
+                        <p className="text-2xl font-black text-red-500 dark:text-red-400 tracking-tighter">{segmentStats.depense.toLocaleString()} {currency}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Coûts Profs</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Occupation</p>
+                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tighter">{segmentStats.occupationRate}%</p>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full mt-2">
+                            <div className="h-full bg-emerald-500" style={{ width: `${segmentStats.occupationRate}%` }}></div>
+                        </div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Restantes</p>
+                        <p className="text-2xl font-black text-amber-500 tracking-tighter">{segmentStats.placesRestantes}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Places Libres</p>
+                    </div>
                 </div>
             </div>
 
@@ -294,7 +520,44 @@ export const StatisticsPage: React.FC<StatisticsPageProps> = ({ courses, attenda
                 </Card>
             </div>
 
-            {/* SECTION 2: GRAPHIQUES ET ANALYSE */}
+            {/* SECTION 2: EFFECTIFS ÉLÈVES */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="p-8 border-0 shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 w-24 h-24 bg-insan-blue/5 rounded-full blur-2xl -mr-8 -mt-8"></div>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Users size={12}/> Effectif Total</p>
+                    <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">{studentStats.total}</p>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-2">Élèves uniques inscrits</p>
+                </Card>
+
+                <Card className="p-8 border-0 shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl -mr-8 -mt-8"></div>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><BookOpen size={12}/> Présentiel</p>
+                    <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 tracking-tighter">{studentStats.onSite}</p>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${studentStats.total > 0 ? (studentStats.onSite / studentStats.total * 100) : 0}%` }}></div>
+                    </div>
+                </Card>
+
+                <Card className="p-8 border-0 shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl -mr-8 -mt-8"></div>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Globe size={12}/> Distanciel</p>
+                    <p className="text-4xl font-black text-blue-500 dark:text-blue-400 tracking-tighter">{studentStats.remote}</p>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                        <div className="h-full bg-blue-500" style={{ width: `${studentStats.total > 0 ? (studentStats.remote / studentStats.total * 100) : 0}%` }}></div>
+                    </div>
+                </Card>
+
+                <Card className="p-8 border-0 shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl -mr-8 -mt-8"></div>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><Layers size={12}/> Hybride</p>
+                    <p className="text-4xl font-black text-amber-500 dark:text-amber-400 tracking-tighter">{studentStats.hybrid}</p>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                        <div className="h-full bg-amber-500" style={{ width: `${studentStats.total > 0 ? (studentStats.hybrid / studentStats.total * 100) : 0}%` }}></div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* SECTION 3: GRAPHIQUES ET ANALYSE */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* GRAPHIQUE ÉVOLUTION FINANCIÈRE */}
                 <Card className="lg:col-span-2 p-8 border-0 shadow-lg bg-white dark:bg-slate-900">

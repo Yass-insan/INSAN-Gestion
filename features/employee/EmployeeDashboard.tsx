@@ -21,9 +21,10 @@ interface EmployeeDashboardProps {
     settings?: InstituteSettings;
     onClockIn: (late: boolean) => void;
     onManageLeave?: (action: 'add' | 'update', leave: LeaveRequest) => void;
+    onReadMore?: (news: NewsItem) => void;
 }
 
-export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, news = [], schedules = [], leaveRequests = [], onClockIn, settings, onManageLeave }) => {
+export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, news = [], schedules = [], leaveRequests = [], onClockIn, settings, onManageLeave, onReadMore }) => {
     const mySchedule = schedules.filter(s => s.userId === user.id).sort((a,b) => (a.dayOfWeek||0) - (b.dayOfWeek||0));
     const myLeaves = leaveRequests.filter(l => l.userId === user.id).sort((a,b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
     const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -137,7 +138,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, news
                         <SectionHeader title="Actualités" icon={Bell} />
                         <div className="space-y-4">
                             {news.slice(0, 3).map(n => (
-                                <div key={n.id} className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-800 ${n.isUrgent ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20' : 'bg-white dark:bg-slate-900'}`}>
+                                <div 
+                                    key={n.id} 
+                                    onClick={() => onReadMore?.(n)}
+                                    className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-800 cursor-pointer transition-all hover:border-insan-blue/50 ${n.isUrgent ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20' : 'bg-white dark:bg-slate-900'}`}
+                                >
                                     {(n.coverUrl || n.mediaUrl) && (
                                         <img src={n.coverUrl || n.mediaUrl} className="w-full h-24 rounded-xl object-cover mb-3" alt="" referrerPolicy="no-referrer" />
                                     )}

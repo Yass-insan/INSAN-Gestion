@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, NewsItem, Course, AttendanceRecord, InstituteSettings, UserRole, WorkSchedule, Pole, RegistrationDossier } from '../../types';
 import { Card, Button, Badge, PageHeader } from '../../components/ui/DesignSystem';
-import { Users, Check, Euro, Activity, UserCheck, BarChart3, PieChart as PieChartIcon, MessageSquare, Image as ImageIcon, ChevronRight, Settings, FileText, Globe, Plus, Bell, Eye, Trash2, Megaphone, X, Edit2 } from 'lucide-react';
+import { Users, Check, Euro, Activity, UserCheck, BarChart3, PieChart as PieChartIcon, MessageSquare, Image as ImageIcon, ChevronRight, Settings, FileText, Globe, Plus, Bell, Eye, Trash2, Megaphone, X, Edit2, Key } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { getTranslation } from '../../services/i18n';
 
@@ -20,10 +20,11 @@ interface AdminDashboardProps {
     onUpdateNews: (news: NewsItem) => void;
     onDeleteNews?: (id: string) => void;
     onNavigate: (view: string) => void;
+    onReadMore?: (news: NewsItem) => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-    user, news, courses, attendance, users, settings, poles, dossiers, onAddNews, onUpdateNews, onDeleteNews, onNavigate 
+    user, news, courses, attendance, users, settings, poles, dossiers, onAddNews, onUpdateNews, onDeleteNews, onNavigate, onReadMore 
 }) => {
     const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
     const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
@@ -140,10 +141,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             totalCA: 0,
             totalPaid: 0,
             caByPole: {} as Record<string, number>,
-            totalInscriptions: dossiers.length
+            totalInscriptions: dossiers.length,
+            totalStudents: 0
         };
 
         dossiers.forEach(d => {
+            stats.totalStudents += (d.students?.length || 0);
             const dossierTotal = d.enrollments.reduce((acc, e) => acc + (e.isVolunteerTeacher ? 0 : e.basePrice + (e.formulaSurcharge || 0)), 0) + 
                                d.dossierFees + (d.montessoriFees || 0) - (d.autoDiscount || 0) - (d.manualDiscount || 0);
             const paid = d.payments.reduce((acc, p) => acc + p.amount, 0);
@@ -181,13 +184,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* QUICK KPIS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Dossiers</p>
+                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Élèves</p>
                     <Card className="p-8 border-0 shadow-lg hover:translate-y-[-4px] transition-all cursor-pointer group" onClick={() => onNavigate('inscriptions')}>
                         <div className="flex justify-between items-center">
-                            <p className="text-4xl font-black text-slate-800 dark:text-white group-hover:text-insan-blue transition-colors">{financialStats.totalInscriptions}</p>
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-insan-blue dark:text-blue-400 rounded-2xl"><UserCheck size={24}/></div>
+                            <p className="text-4xl font-black text-slate-800 dark:text-white group-hover:text-insan-blue transition-colors">{financialStats.totalStudents}</p>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-insan-blue dark:text-blue-400 rounded-2xl"><Users size={24}/></div>
                         </div>
-                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mt-4 uppercase">Familles actives</p>
+                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mt-4 uppercase">Total élèves inscrits</p>
                     </Card>
                 </div>
                 <div className="space-y-2">
@@ -238,7 +241,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {news.slice(0, 5).map(n => (
                                 <div key={n.id} className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-insan-blue transition-all group">
                                     <div className="flex justify-between items-start mb-4">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => onReadMore?.(n)}>
                                             <div className={`p-2 rounded-xl ${n.isUrgent ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-insan-blue'}`}>
                                                 <Megaphone size={18}/>
                                             </div>
@@ -268,6 +271,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </div>
                             ))}
                             {news.length === 0 && <p className="text-center py-10 text-slate-400 italic">Aucune actualité publiée.</p>}
+                        </div>
+                    </Card>
+
+                    <Card className="p-10 shadow-xl border-0">
+                        <div className="flex justify-between items-center mb-12">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Suivi des Appels</h3>
+                                <p className="text-sm font-medium text-slate-400 dark:text-slate-500 mt-1">État des appels pour les cours d'aujourd'hui.</p>
+                            </div>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-insan-blue dark:text-blue-400 rounded-2xl">
+                                <UserCheck size={24}/>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {courses.filter(c => c.dayOfWeek === new Date().getDay()).length > 0 ? (
+                                courses.filter(c => c.dayOfWeek === new Date().getDay()).map(course => {
+                                    const todayStr = new Date().toISOString().split('T')[0];
+                                    const isDone = attendance.some(a => a.courseId === course.id && a.date === todayStr);
+                                    const prof = users.find(u => course.professorIds.includes(u.id));
+                                    const now = new Date();
+                                    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                                    const isEnded = currentTime > course.endTime;
+
+                                    return (
+                                        <div key={course.id} className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-3 h-3 rounded-full ${isDone ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : (isEnded ? 'bg-red-500 animate-pulse' : 'bg-amber-500')}`} />
+                                                <div>
+                                                    <h4 className="font-black text-slate-800 dark:text-white text-sm">{course.name}</h4>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                        {course.startTime} - {course.endTime} • Prof: {prof?.name || 'Non assigné'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                {isDone ? (
+                                                    <Badge color="emerald" className="px-4 py-1.5 rounded-xl">Appel Fait</Badge>
+                                                ) : (
+                                                    <Badge color={isEnded ? "red" : "amber"} className="px-4 py-1.5 rounded-xl">
+                                                        {isEnded ? "Appel Manquant" : "En cours / À venir"}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center py-10">
+                                    <p className="text-sm font-bold text-slate-400 italic">Aucun cours prévu aujourd'hui.</p>
+                                </div>
+                            )}
                         </div>
                     </Card>
 
@@ -304,10 +359,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 {/* Sidebar Info Section */}
                 <div className="space-y-10">
-                    <Card className="p-0 border-0 shadow-2xl bg-insan-blue text-white overflow-hidden group">
+                    <Card className="p-0 border-0 shadow-2xl !bg-insan-blue dark:!bg-insan-blue text-white overflow-hidden group">
                         <div className="p-8 pb-4">
                             <h3 className="text-xl font-black flex items-center gap-3"><Activity size={24} className="text-insan-orange"/> Inscriptions</h3>
-                            <p className="text-xs text-blue-200/60 uppercase font-black mt-2 tracking-widest">Activités Récentes</p>
+                            <p className="text-xs text-blue-100/80 uppercase font-black mt-2 tracking-widest">Activités Récentes</p>
                         </div>
                         <div className="p-8 pt-4 space-y-8">
                             {dossiers.slice(0, 4).map(d => (
@@ -317,19 +372,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-black truncate">{d.firstName} {d.lastName}</p>
-                                        <p className="text-[10px] text-blue-200/40 font-bold uppercase tracking-tighter">le {new Date(d.createdAt || '').toLocaleDateString()}</p>
+                                        <p className="text-[10px] text-blue-100/60 font-bold uppercase tracking-tighter">le {new Date(d.createdAt || '').toLocaleDateString()}</p>
                                     </div>
                                     <ChevronRight size={16} className="text-white/20"/>
                                 </div>
                             ))}
-                            {dossiers.length === 0 && <p className="text-center py-10 text-white/40 italic text-xs">Aucune donnée.</p>}
+                            {dossiers.length === 0 && <p className="text-center py-10 text-white/60 italic text-xs">Aucune donnée.</p>}
                         </div>
                         <div className="p-6 bg-black/20 text-center">
                              <button onClick={() => onNavigate('inscriptions')} className="text-[10px] font-black text-insan-orange hover:underline tracking-widest uppercase">Gérer tous les dossiers</button>
                         </div>
                     </Card>
 
-                    <Card className="p-8 bg-slate-50 dark:bg-slate-800/50 border-0 shadow-inner">
+                    <Card className="p-8 !bg-slate-50 dark:!bg-slate-800/50 border-0 shadow-inner">
                         <h4 className="font-black text-slate-800 dark:text-white mb-8 flex items-center gap-3 uppercase text-xs tracking-widest">
                             <Settings size={18} className="text-slate-400"/> Pilotage Rapide
                         </h4>
@@ -337,7 +392,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {[
                                 { id: 'tarification', label: 'Tarifs & Règles', icon: Euro },
                                 { id: 'manage-courses', label: 'Catalogue Cours', icon: BarChart3 },
-                                { id: 'employees', label: 'Ressources Humaines', icon: Users }
+                                { id: 'employees', label: 'Ressources Humaines', icon: Users },
+                                { id: 'keys', label: 'Gestion des Clés', icon: Key }
                             ].map(link => (
                                 <button key={link.id} onClick={() => onNavigate(link.id)} className="w-full flex items-center justify-between p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl hover:border-insan-blue transition-all group shadow-sm">
                                     <div className="flex items-center gap-4">
@@ -440,7 +496,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-700">
+                                <div className="p-6 !bg-slate-50 dark:!bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-700">
                                     <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4 ml-1">Cibles de visibilité</label>
                                     <div className="flex flex-wrap gap-3">
                                         {[
